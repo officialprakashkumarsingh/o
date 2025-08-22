@@ -41,6 +41,36 @@ class MarkdownMessage extends StatelessWidget {
     }
 
     // AI messages: full markdown support with custom code blocks
+    // First, let's process code blocks manually
+    String processedContent = content;
+    final codeBlockRegex = RegExp(r'```(\w*)\n([\s\S]*?)```', multiLine: true);
+    final codeBlocks = <String, Widget>{};
+    int blockIndex = 0;
+    
+    // Replace code blocks with placeholders and store widgets
+    processedContent = processedContent.replaceAllMapped(codeBlockRegex, (match) {
+      final language = match.group(1) ?? '';
+      final code = match.group(2) ?? '';
+      final placeholder = '___CODEBLOCK_${blockIndex}___';
+      
+      codeBlocks[placeholder] = Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: _CodeBlockWidget(
+          code: code.trim(),
+          language: language,
+        ),
+      );
+      
+      blockIndex++;
+      return placeholder;
+    });
+    
+    // If we have code blocks, build a custom widget
+    if (codeBlocks.isNotEmpty) {
+      return _buildContentWithCodeBlocks(context, processedContent, codeBlocks);
+    }
+    
+    // Otherwise, use standard markdown rendering
     final codeBlockBuilder = CodeBlockBuilder(context);
     
     return MarkdownBody(
@@ -68,6 +98,54 @@ class MarkdownMessage extends StatelessWidget {
     return text.contains('```mermaid') || 
            text.contains('```Mermaid') || 
            text.contains('```MERMAID');
+  }
+  
+  Widget _buildContentWithCodeBlocks(BuildContext context, String content, Map<String, Widget> codeBlocks) {
+    final parts = <Widget>[];
+    final lines = content.split('\n');
+    String currentText = '';
+    
+    for (final line in lines) {
+      // Check if this line is a code block placeholder
+      if (line.startsWith('___CODEBLOCK_') && line.endsWith('___')) {
+        // Add any accumulated text as markdown
+        if (currentText.isNotEmpty) {
+          parts.add(
+            MarkdownBody(
+              data: currentText,
+              selectable: true,
+              styleSheet: _buildMarkdownStyleSheet(context),
+            ),
+          );
+          currentText = '';
+        }
+        
+        // Add the code block widget
+        final widget = codeBlocks[line];
+        if (widget != null) {
+          parts.add(widget);
+        }
+      } else {
+        // Accumulate regular text
+        currentText += '$line\n';
+      }
+    }
+    
+    // Add any remaining text
+    if (currentText.isNotEmpty) {
+      parts.add(
+        MarkdownBody(
+          data: currentText,
+          selectable: true,
+          styleSheet: _buildMarkdownStyleSheet(context),
+        ),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: parts,
+    );
   }
 
   Widget _buildContentWithDiagram(BuildContext context) {
@@ -188,18 +266,11 @@ class MarkdownMessage extends StatelessWidget {
       
       // Code styles
       code: GoogleFonts.jetBrainsMono(
-        backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        backgroundColor: Colors.transparent, // Remove background for inline code
         color: textColor,
         fontSize: 13,
       ),
-      codeblockDecoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
+      codeblockDecoration: const BoxDecoration(), // Empty decoration - handled by custom builder
       
       // List styles
       listBullet: theme.textTheme.bodyMedium?.copyWith(
