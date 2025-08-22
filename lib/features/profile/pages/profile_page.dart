@@ -147,6 +147,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       title: 'Appearance',
                       subtitle: 'Theme and colors',
                       onTap: _showThemeSelector,
+                      isLocked: AdService.instance.needsToWatchAd(),
                     ),
                     
                     // AI Settings
@@ -155,6 +156,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       title: 'AI Response Style',
                       subtitle: 'Customize AI behavior',
                       onTap: _showMessageModeSelector,
+                      isLocked: AdService.instance.needsToWatchAd(),
                     ),
                     
                     const SizedBox(height: 24),
@@ -251,6 +253,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool isLocked = false,
   }) {
     final theme = Theme.of(context);
     
@@ -281,11 +284,44 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (isLocked) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 12,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Watch Ad',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -298,8 +334,11 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                 ),
               ),
               Icon(
-                Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurface.withOpacity(0.3),
+                isLocked ? Icons.lock_outline : Icons.chevron_right_rounded,
+                color: isLocked 
+                    ? theme.colorScheme.primary.withOpacity(0.6)
+                    : theme.colorScheme.onSurface.withOpacity(0.3),
+                size: isLocked ? 20 : 24,
               ),
             ],
           ),
@@ -440,13 +479,15 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
-  void _showAdRequiredDialog({required VoidCallback onWatchAd}) {
+  void _showAdRequiredDialog({required VoidCallback onWatchAd, String? feature}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Unlock Premium Feature'),
-        content: const Text(
-          'Watch a short video ad to unlock multiple models feature for this session. This helps support the app development.',
+        content: Text(
+          feature != null 
+            ? 'Watch a short video ad to unlock $feature for this session. This helps support the app development.'
+            : 'Watch a short video ad to unlock this premium feature for this session. This helps support the app development.',
         ),
         actions: [
           TextButton(
@@ -561,6 +602,39 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   }
 
   void _showThemeSelector() {
+    // Check if user needs to watch ad for this feature
+    if (AdService.instance.needsToWatchAd()) {
+      _showAdRequiredDialog(
+        feature: 'Appearance settings',
+        onWatchAd: () async {
+          final success = await AdService.instance.showRewardedAd(
+            onRewardEarned: () {
+              // Show theme selector after watching ad
+              _showThemeSelectorSheet();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Appearance settings unlocked!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+          );
+          
+          if (!success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Ad not ready. Please try again later.'),
+              ),
+            );
+          }
+        },
+      );
+    } else {
+      _showThemeSelectorSheet();
+    }
+  }
+  
+  void _showThemeSelectorSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -617,6 +691,39 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   }
 
   void _showMessageModeSelector() {
+    // Check if user needs to watch ad for this feature
+    if (AdService.instance.needsToWatchAd()) {
+      _showAdRequiredDialog(
+        feature: 'AI Response Style settings',
+        onWatchAd: () async {
+          final success = await AdService.instance.showRewardedAd(
+            onRewardEarned: () {
+              // Show message mode selector after watching ad
+              _showMessageModeSelectorSheet();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('AI Response Style settings unlocked!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+          );
+          
+          if (!success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Ad not ready. Please try again later.'),
+              ),
+            );
+          }
+        },
+      );
+    } else {
+      _showMessageModeSelectorSheet();
+    }
+  }
+  
+  void _showMessageModeSelectorSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -686,6 +793,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       if (value && AdService.instance.needsToWatchAd()) {
                         // Show ad before enabling
                         _showAdRequiredDialog(
+                          feature: 'Multiple AI Models',
                           onWatchAd: () async {
                             final success = await AdService.instance.showRewardedAd(
                               onRewardEarned: () {
@@ -843,6 +951,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       if (value && AdService.instance.needsToWatchAd()) {
                         // Show ad before enabling
                         _showAdRequiredDialog(
+                          feature: 'Multiple Image Models',
                           onWatchAd: () async {
                             final success = await AdService.instance.showRewardedAd(
                               onRewardEarned: () {
