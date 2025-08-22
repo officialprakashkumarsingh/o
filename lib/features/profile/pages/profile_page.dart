@@ -8,6 +8,7 @@ import '../../chat/widgets/model_selector_sheet.dart';
 import '../../../core/services/model_service.dart';
 import '../../../core/services/image_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../shared/widgets/smooth_app_bar.dart';
 import '../../auth/pages/login_page.dart';
 
@@ -439,6 +440,31 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     );
   }
 
+  void _showAdRequiredDialog({required VoidCallback onWatchAd}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unlock Premium Feature'),
+        content: const Text(
+          'Watch a short video ad to unlock multiple models feature for this session. This helps support the app development.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              onWatchAd();
+            },
+            child: const Text('Watch Ad'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _signOut() async {
     // Show confirmation dialog
     final shouldSignOut = await showDialog<bool>(
@@ -656,8 +682,35 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                   
                   Switch(
                     value: modelService.multipleModelsEnabled,
-                    onChanged: (value) {
-                      modelService.setMultipleModelsEnabled(value);
+                    onChanged: (value) async {
+                      if (value && AdService.instance.needsToWatchAd()) {
+                        // Show ad before enabling
+                        _showAdRequiredDialog(
+                          onWatchAd: () async {
+                            final success = await AdService.instance.showRewardedAd(
+                              onRewardEarned: () {
+                                modelService.setMultipleModelsEnabled(true);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Multiple AI models unlocked!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              },
+                            );
+                            
+                            if (!success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ad not ready. Please try again later.'),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      } else {
+                        modelService.setMultipleModelsEnabled(value);
+                      }
                     },
                   ),
                 ],
@@ -786,8 +839,35 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                   
                   Switch(
                     value: imageService.multipleModelsEnabled,
-                    onChanged: (value) {
-                      imageService.setMultipleModelsEnabled(value);
+                    onChanged: (value) async {
+                      if (value && AdService.instance.needsToWatchAd()) {
+                        // Show ad before enabling
+                        _showAdRequiredDialog(
+                          onWatchAd: () async {
+                            final success = await AdService.instance.showRewardedAd(
+                              onRewardEarned: () {
+                                imageService.setMultipleModelsEnabled(true);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Multiple image models unlocked!'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              },
+                            );
+                            
+                            if (!success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ad not ready. Please try again later.'),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      } else {
+                        imageService.setMultipleModelsEnabled(value);
+                      }
                     },
                   ),
                 ],

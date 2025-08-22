@@ -379,6 +379,10 @@ class _ChatPageState extends State<ChatPage> {
           child: MessageBubble(
             message: message,
             modelName: ModelService.instance.selectedModel,
+            userMessage: message.type == MessageType.assistant && index > 0 && _messages[index - 1].type == MessageType.user
+                ? _messages[index - 1].content
+                : '',
+            aiModel: ModelService.instance.selectedModel,
             onCopy: () => _copyMessage(message),
             onRegenerate: message.type == MessageType.assistant
                 ? () => _regenerateMessage(index)

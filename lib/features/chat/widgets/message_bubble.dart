@@ -124,7 +124,7 @@ class _MessageBubbleState extends State<MessageBubble>
               left: -1000,
               child: Material(
                 child: Container(
-                  width: 800,
+                  width: 1200, // Increased width for better quality
                   color: Theme.of(context).scaffoldBackgroundColor,
                   child: RepaintBoundary(
                     key: exportKey,
