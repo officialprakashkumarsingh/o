@@ -147,7 +147,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       title: 'Appearance',
                       subtitle: 'Theme and colors',
                       onTap: _showThemeSelector,
-                      isLocked: AdService.instance.needsToWatchAd(),
+                      isLocked: false, // Unlocked - free feature
                     ),
                     
                     // AI Settings
@@ -602,36 +602,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   }
 
   void _showThemeSelector() {
-    // Check if user needs to watch ad for this feature
-    if (AdService.instance.needsToWatchAd()) {
-      _showAdRequiredDialog(
-        feature: 'Appearance settings',
-        onWatchAd: () async {
-          final success = await AdService.instance.showRewardedAd(
-            onRewardEarned: () {
-              // Show theme selector after watching ad
-              _showThemeSelectorSheet();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Appearance settings unlocked!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-          );
-          
-          if (!success) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Ad not ready. Please try again later.'),
-              ),
-            );
-          }
-        },
-      );
-    } else {
-      _showThemeSelectorSheet();
-    }
+    // Appearance is now a free feature - no ad required
+    _showThemeSelectorSheet();
   }
   
   void _showThemeSelectorSheet() {

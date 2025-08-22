@@ -67,8 +67,6 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     ChatHistoryService.instance.removeListener(_onSessionChanged);
-    _scrollController.dispose();
-    _inputController.dispose();
     super.dispose();
   }
   
@@ -536,7 +534,7 @@ Based on the above current information and search results, please provide a comp
         });
         
         // Start response for this model
-        _handleModelResponse(
+        await _handleModelResponse(
           enhancedContent,
           model,
           history,
