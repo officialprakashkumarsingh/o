@@ -855,7 +855,7 @@ class _MessageBubbleState extends State<MessageBubble>
     } else {
       return MarkdownMessage(
         content: message.content,
-        isUserMessage: false,
+        isUser: false,
       );
     }
   }

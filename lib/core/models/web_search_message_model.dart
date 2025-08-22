@@ -18,16 +18,21 @@ class WebSearchMessage extends Message {
           isStreaming: isSearching,
         );
 
-  WebSearchMessage copyWith({
-    bool? isSearching,
-    String? searchQuery,
-    String? searchResults,
+  @override
+  Message copyWith({
+    String? id,
+    String? content,
+    MessageType? type,
+    DateTime? timestamp,
+    bool? isStreaming,
+    bool? hasError,
   }) {
+    // For WebSearchMessage, we treat content as searchResults
     return WebSearchMessage(
-      id: id,
-      isSearching: isSearching ?? this.isSearching,
-      searchQuery: searchQuery ?? this.searchQuery,
-      searchResults: searchResults ?? this.searchResults,
+      id: id ?? this.id,
+      isSearching: isStreaming ?? this.isSearching,
+      searchQuery: searchQuery,
+      searchResults: content ?? this.searchResults,
     );
   }
 }
