@@ -41,13 +41,15 @@ class MarkdownMessage extends StatelessWidget {
     }
 
     // AI messages: full markdown support with custom code blocks
+    final codeBlockBuilder = CodeBlockBuilder(context);
+    
     return MarkdownBody(
       data: content,
       selectable: true,
       styleSheet: _buildMarkdownStyleSheet(context),
       builders: {
-        'pre': CodeBlockBuilder(context),
-        'code': CodeBlockBuilder(context),
+        'pre': codeBlockBuilder,
+        'code': codeBlockBuilder,
       },
       extensionSet: md.ExtensionSet(
         md.ExtensionSet.gitHubFlavored.blockSyntaxes,
@@ -79,14 +81,15 @@ class MarkdownMessage extends StatelessWidget {
       if (match.start > lastEnd) {
         final textBefore = content.substring(lastEnd, match.start);
         if (textBefore.trim().isNotEmpty) {
+          final codeBlockBuilder = CodeBlockBuilder(context);
           parts.add(
             MarkdownBody(
               data: textBefore,
               selectable: true,
               styleSheet: _buildMarkdownStyleSheet(context),
               builders: {
-                'pre': CodeBlockBuilder(context),
-                'code': CodeBlockBuilder(context),
+                'pre': codeBlockBuilder,
+                'code': codeBlockBuilder,
               },
               extensionSet: md.ExtensionSet(
                 md.ExtensionSet.gitHubFlavored.blockSyntaxes,
@@ -120,14 +123,15 @@ class MarkdownMessage extends StatelessWidget {
     if (lastEnd < content.length) {
       final textAfter = content.substring(lastEnd);
       if (textAfter.trim().isNotEmpty) {
+        final codeBlockBuilder = CodeBlockBuilder(context);
         parts.add(
           MarkdownBody(
             data: textAfter,
             selectable: true,
             styleSheet: _buildMarkdownStyleSheet(context),
             builders: {
-              'pre': CodeBlockBuilder(context),
-              'code': CodeBlockBuilder(context),
+              'pre': codeBlockBuilder,
+              'code': codeBlockBuilder,
             },
             extensionSet: md.ExtensionSet(
               md.ExtensionSet.gitHubFlavored.blockSyntaxes,
@@ -253,36 +257,45 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
   
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    // Handle pre blocks (code blocks)
     if (element.tag == 'pre') {
-      // Handle code blocks
       String code = element.textContent;
       String language = '';
       
-      // Check if pre contains a code element
-      if (element.children != null && element.children!.isNotEmpty) {
-        final codeElement = element.children!.firstWhere(
-          (e) => e is md.Element && e.tag == 'code',
-          orElse: () => element,
-        );
-        if (codeElement is md.Element) {
-          code = codeElement.textContent;
-          language = _extractLanguage(codeElement);
+      // Try to extract language from code element inside pre
+      for (final node in element.children ?? []) {
+        if (node is md.Element && node.tag == 'code') {
+          code = node.textContent;
+          final className = node.attributes['class'] ?? '';
+          if (className.startsWith('language-')) {
+            language = className.substring('language-'.length);
+          }
+          break;
         }
       }
       
-      return _CodeBlockWidget(
-        code: code.trim(),
-        language: language,
+      // Return the custom code block widget
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: _CodeBlockWidget(
+          code: code.trim(),
+          language: language,
+        ),
       );
-    } else if (element.tag == 'code') {
-      // Check if this code has children (means it's a code block, not inline)
-      if (element.children?.isNotEmpty == true) {
-        return null; // This is handled by the pre block
+    }
+    
+    // Handle inline code
+    if (element.tag == 'code') {
+      // Skip if this has a language class (it's part of a code block)
+      final className = element.attributes['class'] ?? '';
+      if (className.startsWith('language-')) {
+        return null; // This will be handled by the pre block
       }
       
       // This is inline code
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
           color: Theme.of(context).brightness == Brightness.dark
               ? Colors.grey[800]
@@ -300,6 +313,7 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
         ),
       );
     }
+    
     return null;
   }
   
@@ -395,7 +409,6 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
     final isDark = theme.brightness == Brightness.dark;
     
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFF282C34),
         borderRadius: BorderRadius.circular(8),
