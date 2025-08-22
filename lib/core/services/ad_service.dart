@@ -8,10 +8,10 @@ class AdService {
   
   AdService._internal();
 
-  // AdMob IDs - Replace with your actual ad unit IDs
+  // AdMob IDs
   static const String _rewardedAdUnitId = kDebugMode
       ? 'ca-app-pub-3940256099942544/5224354917' // Test ID for rewarded video
-      : 'ca-app-pub-3394897715416901/YOUR_REWARDED_AD_ID'; // TODO: Add your production rewarded ad ID
+      : 'ca-app-pub-3394897715416901/4102565339'; // Production rewarded ad ID
 
   RewardedAd? _rewardedAd;
   bool _isRewardedAdReady = false;
