@@ -46,8 +46,16 @@ class MarkdownMessage extends StatelessWidget {
       selectable: true,
       styleSheet: _buildMarkdownStyleSheet(context),
       builders: {
+        'pre': CodeBlockBuilder(context),
         'code': CodeBlockBuilder(context),
       },
+      extensionSet: md.ExtensionSet(
+        md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+        [
+          md.EmojiSyntax(),
+          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+        ],
+      ),
       onTapLink: (text, href, title) {
         // Handle link taps if needed
       },
@@ -76,6 +84,17 @@ class MarkdownMessage extends StatelessWidget {
               data: textBefore,
               selectable: true,
               styleSheet: _buildMarkdownStyleSheet(context),
+              builders: {
+                'pre': CodeBlockBuilder(context),
+                'code': CodeBlockBuilder(context),
+              },
+              extensionSet: md.ExtensionSet(
+                md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                [
+                  md.EmojiSyntax(),
+                  ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                ],
+              ),
             ),
           );
         }
@@ -106,6 +125,17 @@ class MarkdownMessage extends StatelessWidget {
             data: textAfter,
             selectable: true,
             styleSheet: _buildMarkdownStyleSheet(context),
+            builders: {
+              'pre': CodeBlockBuilder(context),
+              'code': CodeBlockBuilder(context),
+            },
+            extensionSet: md.ExtensionSet(
+              md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+              [
+                md.EmojiSyntax(),
+                ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+              ],
+            ),
           ),
         );
       }
@@ -224,26 +254,48 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     if (element.tag == 'pre') {
-      final code = element.textContent;
-      final language = _extractLanguage(element);
+      // Handle code blocks
+      String code = element.textContent;
+      String language = '';
+      
+      // Check if pre contains a code element
+      if (element.children != null && element.children!.isNotEmpty) {
+        final codeElement = element.children!.firstWhere(
+          (e) => e is md.Element && e.tag == 'code',
+          orElse: () => element,
+        );
+        if (codeElement is md.Element) {
+          code = codeElement.textContent;
+          language = _extractLanguage(codeElement);
+        }
+      }
       
       return _CodeBlockWidget(
-        code: code,
+        code: code.trim(),
         language: language,
       );
-    } else if (element.tag == 'code' && element.children?.isEmpty == true) {
-      // Inline code
+    } else if (element.tag == 'code') {
+      // Check if this is part of a pre block (handled above)
+      if (element.parent?.tag == 'pre') {
+        return null; // Let the pre handler deal with it
+      }
+      
+      // This is inline code
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[800]
+              : Colors.grey[200],
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           element.textContent,
           style: GoogleFonts.jetBrainsMono(
             fontSize: 13,
-            color: Theme.of(context).colorScheme.onSurface,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : Colors.black87,
           ),
         ),
       );
@@ -255,6 +307,11 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     final className = element.attributes['class'] ?? '';
     if (className.startsWith('language-')) {
       return className.substring('language-'.length);
+    }
+    // Also check for common language indicators
+    final text = element.textContent.toLowerCase();
+    if (text.contains('<!doctype html') || text.contains('<html')) {
+      return 'html';
     }
     return '';
   }
@@ -275,6 +332,29 @@ class _CodeBlockWidget extends StatefulWidget {
 
 class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
   bool _copied = false;
+  bool _showPreview = false;
+  WebViewController? _webViewController;
+  
+  @override
+  void initState() {
+    super.initState();
+    if (_isHtmlCode()) {
+      _initWebView();
+    }
+  }
+  
+  bool _isHtmlCode() {
+    return widget.language.toLowerCase() == 'html' || 
+           widget.code.trim().toLowerCase().startsWith('<!doctype html') ||
+           widget.code.trim().toLowerCase().startsWith('<html');
+  }
+  
+  void _initWebView() {
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.white)
+      ..loadHtmlString(widget.code);
+  }
   
   void _copyToClipboard() {
     Clipboard.setData(ClipboardData(text: widget.code));
@@ -298,6 +378,15 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
         margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
       ),
     );
+  }
+  
+  void _togglePreview() {
+    setState(() {
+      _showPreview = !_showPreview;
+      if (_showPreview && _webViewController == null) {
+        _initWebView();
+      }
+    });
   }
   
   @override
@@ -380,6 +469,37 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
                     ),
                   ),
                 const Spacer(),
+                // HTML Preview button
+                if (_isHtmlCode()) ...[
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _togglePreview,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _showPreview ? Icons.code : Icons.preview,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _showPreview ? 'Code' : 'Preview',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 // Copy button
                 Material(
                   color: Colors.transparent,
@@ -415,22 +535,44 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
               ],
             ),
           ),
-          // Code content
-          Container(
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: HighlightView(
-                widget.code,
-                language: widget.language.isEmpty ? 'plaintext' : widget.language,
-                theme: isDark ? monokaiSublimeTheme : atomOneLightTheme,
-                textStyle: GoogleFonts.jetBrainsMono(
-                  fontSize: 13,
-                  height: 1.5,
+          // Code content or HTML preview
+          if (_showPreview && _webViewController != null) ...[
+            // HTML Preview
+            Container(
+              height: 300,
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: WebViewWidget(controller: _webViewController!),
+            ),
+          ] else ...[
+            // Code content
+            Container(
+              padding: const EdgeInsets.all(12),
+              constraints: BoxConstraints(
+                maxHeight: 400, // Limit height for very long code
+              ),
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: HighlightView(
+                    widget.code,
+                    language: widget.language.isEmpty ? 'plaintext' : widget.language,
+                    theme: isDark ? monokaiSublimeTheme : atomOneLightTheme,
+                    textStyle: GoogleFonts.jetBrainsMono(
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
