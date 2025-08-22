@@ -694,6 +694,15 @@ Based on the above current information and search results, please provide a comp
 
     _scrollToBottom();
 
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Analyzing Image',
+      subtitle: 'Understanding visual content',
+      icon: Icons.image_search_outlined,
+      tip: 'AI is examining your image',
+    );
+
     try {
       // Add AI response placeholder
       final aiMessage = Message.assistant('');
@@ -721,10 +730,16 @@ Based on the above current information and search results, please provide a comp
         }
       }
 
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -760,6 +775,15 @@ Based on the above current information and search results, please provide a comp
 
     _scrollToBottom();
 
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Image',
+      subtitle: 'Creating visual artwork',
+      icon: Icons.auto_awesome_outlined,
+      tip: 'AI is painting your image',
+    );
+
     try {
       // Handle multiple image models or single model
       for (int i = 0; i < modelsToUse.length; i++) {
@@ -780,7 +804,13 @@ Based on the above current information and search results, please provide a comp
           i,
         );
       }
+      
+      // Close loading dialog after all models complete
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
+      // Close loading dialog on error
+      if (mounted) Navigator.of(context).pop();
+      
       if (mounted) {
         setState(() {
           _messages.add(Message.error(
@@ -805,6 +835,15 @@ Based on the above current information and search results, please provide a comp
     });
     
     _scrollToBottom();
+    
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Diagram',
+      subtitle: 'Creating visual representation',
+      icon: Icons.account_tree_outlined,
+      tip: 'AI is designing your diagram',
+    );
     
     try {
       // Generate diagram using AI
@@ -850,6 +889,9 @@ Generate the Mermaid code now:''';
         mermaidCode: mermaidCode,
       );
       
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(diagramMessage);
         _isLoading = false;
@@ -857,6 +899,9 @@ Generate the Mermaid code now:''';
       
       _scrollToBottom();
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(Message.error(
           'Sorry, I encountered an error generating the diagram. Please try again.',
@@ -949,13 +994,34 @@ Generate the complete presentation now:''';
   }
 
   void _showPresentationLoadingDialog(BuildContext context) {
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Presentation',
+      subtitle: 'Creating your slides',
+      icon: Icons.slideshow_rounded,
+      tip: 'AI is crafting professional slides',
+    );
+  }
+  
+  void _showGenerationLoadingDialog({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String tip,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return Dialog(
           backgroundColor: Colors.transparent,
-          child: _PresentationLoadingWidget(),
+          child: _GenerationLoadingWidget(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            tip: tip,
+          ),
         );
       },
     );
@@ -1103,6 +1169,15 @@ Generate the complete presentation now:''';
       _messages.add(userMessage);
     });
     
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Chart',
+      subtitle: 'Creating data visualization',
+      icon: Icons.bar_chart_outlined,
+      tip: 'AI is analyzing your data',
+    );
+    
     // Generate chart prompt
     final chartPrompt = '''
 Generate a Chart.js configuration JSON for: $prompt
@@ -1178,6 +1253,9 @@ Format the response as:
               finalConfig = ChartService.generateSampleChart(prompt);
             }
             
+            // Close loading dialog
+            if (mounted) Navigator.of(context).pop();
+            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1191,6 +1269,9 @@ Format the response as:
         },
         onError: (error) {
           if (mounted) {
+            // Close loading dialog
+            Navigator.of(context).pop();
+            
             // Generate a sample chart on error
             final sampleConfig = ChartService.generateSampleChart(prompt);
             
@@ -1208,6 +1289,9 @@ Format the response as:
         },
       );
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       // Generate sample on exception
       final sampleConfig = ChartService.generateSampleChart(prompt);
       
@@ -1239,6 +1323,15 @@ Format the response as:
     setState(() {
       _messages.add(userMessage);
     });
+    
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Flashcards',
+      subtitle: 'Creating study materials',
+      icon: Icons.style_outlined,
+      tip: 'AI is preparing your flashcards',
+    );
     
     // Generate flashcard prompt
     final flashcardPrompt = '''
@@ -1308,6 +1401,9 @@ Generate 5-10 flashcards covering key concepts.
               finalFlashcards = FlashcardService.generateSampleFlashcards(prompt);
             }
             
+            // Close loading dialog
+            if (mounted) Navigator.of(context).pop();
+            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1321,6 +1417,9 @@ Generate 5-10 flashcards covering key concepts.
         },
         onError: (error) {
           if (mounted) {
+            // Close loading dialog
+            Navigator.of(context).pop();
+            
             // Generate sample flashcards on error
             final sampleFlashcards = FlashcardService.generateSampleFlashcards(prompt);
             
@@ -1338,6 +1437,9 @@ Generate 5-10 flashcards covering key concepts.
         },
       );
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       // Generate sample on exception
       final sampleFlashcards = FlashcardService.generateSampleFlashcards(prompt);
       
@@ -1369,6 +1471,15 @@ Generate 5-10 flashcards covering key concepts.
     setState(() {
       _messages.add(userMessage);
     });
+    
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Quiz',
+      subtitle: 'Creating questions',
+      icon: Icons.quiz_outlined,
+      tip: 'AI is preparing your quiz',
+    );
     
     // Generate quiz prompt
     final quizPrompt = '''
@@ -1439,6 +1550,9 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
               finalQuestions = QuizService.generateSampleQuiz(prompt);
             }
             
+            // Close loading dialog
+            Navigator.of(context).pop();
+            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1452,6 +1566,9 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
         },
         onError: (error) {
           if (mounted) {
+            // Close loading dialog
+            Navigator.of(context).pop();
+            
             // Generate sample quiz on error
             final sampleQuestions = QuizService.generateSampleQuiz(prompt);
             
@@ -1469,6 +1586,9 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
         },
       );
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       // Generate sample on exception
       final sampleQuestions = QuizService.generateSampleQuiz(prompt);
       
@@ -1488,12 +1608,24 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
 
 }
 
-class _PresentationLoadingWidget extends StatefulWidget {
+class _GenerationLoadingWidget extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String tip;
+  
+  const _GenerationLoadingWidget({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.tip,
+  });
+  
   @override
-  _PresentationLoadingWidgetState createState() => _PresentationLoadingWidgetState();
+  _GenerationLoadingWidgetState createState() => _GenerationLoadingWidgetState();
 }
 
-class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
+class _GenerationLoadingWidgetState extends State<_GenerationLoadingWidget>
     with TickerProviderStateMixin {
   late AnimationController _shimmerController;
   late AnimationController _pulseController;
@@ -1589,7 +1721,7 @@ class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.slideshow_rounded,
+                widget.icon,
                 size: 40,
                 color: theme.colorScheme.primary,
               ),
@@ -1600,7 +1732,7 @@ class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
           
           // Title
           Text(
-            'Generating Presentation',
+            widget.title,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w600,
             ),
@@ -1613,7 +1745,7 @@ class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
             text: TextSpan(
               children: [
                 TextSpan(
-                  text: 'Creating your slides... ',
+                  text: '${widget.subtitle}... ',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
@@ -1689,7 +1821,7 @@ class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'AI is crafting professional slides',
+                  widget.tip,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withOpacity(0.5),
                   ),
