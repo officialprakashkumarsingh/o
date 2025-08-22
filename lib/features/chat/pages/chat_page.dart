@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -877,6 +879,9 @@ Generate the Mermaid code now:''';
 
     _scrollToBottom();
 
+    // Show loading dialog with countdown
+    _showPresentationLoadingDialog(context);
+
     try {
       final presentationPrompt = '''Create a comprehensive professional presentation about: $prompt
 
@@ -921,6 +926,9 @@ Generate the complete presentation now:''';
         slides: slides,
       );
 
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
       setState(() {
         _messages.add(presentationMessage);
         _isLoading = false;
@@ -928,6 +936,9 @@ Generate the complete presentation now:''';
 
       _scrollToBottom();
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(Message.error(
           'Sorry, I encountered an error generating the presentation. Please try again.',
@@ -935,6 +946,19 @@ Generate the complete presentation now:''';
         _isLoading = false;
       });
     }
+  }
+
+  void _showPresentationLoadingDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: _PresentationLoadingWidget(),
+        );
+      },
+    );
   }
 
   List<PresentationSlide> _parsePresentation(String response) {
@@ -1462,4 +1486,219 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
     }
   }
 
+}
+
+class _PresentationLoadingWidget extends StatefulWidget {
+  @override
+  _PresentationLoadingWidgetState createState() => _PresentationLoadingWidgetState();
+}
+
+class _PresentationLoadingWidgetState extends State<_PresentationLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late AnimationController _pulseController;
+  late Animation<double> _shimmerAnimation;
+  late Animation<double> _pulseAnimation;
+  int _secondsElapsed = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize shimmer animation
+    _shimmerController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+    
+    // Initialize pulse animation
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Start countdown timer
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _secondsElapsed++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _shimmerController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Animated icon
+          ScaleTransition(
+            scale: _pulseAnimation,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.slideshow_rounded,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Title
+          Text(
+            'Generating Presentation',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Subtitle with timer
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'Creating your slides... ',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                TextSpan(
+                  text: _formatTime(_secondsElapsed),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Shimmer loading bars
+          Column(
+            children: List.generate(3, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: AnimatedBuilder(
+                  animation: _shimmerAnimation,
+                  builder: (context, child) {
+                    return Container(
+                      height: 8,
+                      width: 200 - (index * 30),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.primary.withOpacity(0.3),
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.surfaceVariant,
+                          ],
+                          stops: [
+                            0.0,
+                            _shimmerAnimation.value - 0.3,
+                            _shimmerAnimation.value,
+                            _shimmerAnimation.value + 0.3,
+                            1.0,
+                          ].map((stop) => stop.clamp(0.0, 1.0)).toList(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Tips text
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'AI is crafting professional slides',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

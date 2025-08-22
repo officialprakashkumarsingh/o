@@ -95,15 +95,30 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => const MainPage(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 0.015);
+              const end = Offset.zero;
+              const curve = Curves.easeOutCubic;
+              
+              var tween = Tween(begin: begin, end: end).chain(
+                CurveTween(curve: curve),
+              );
+              
+              var offsetAnimation = animation.drive(tween);
+              var fadeAnimation = animation.drive(
+                Tween(begin: 0.0, end: 1.0).chain(
+                  CurveTween(curve: const Interval(0.0, 0.6, curve: Curves.easeOut)),
+                ),
+              );
+              
               return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: animation,
+                opacity: fadeAnimation,
+                child: SlideTransition(
+                  position: offsetAnimation,
                   child: child,
                 ),
               );
             },
-            transitionDuration: const Duration(milliseconds: 500),
+            transitionDuration: const Duration(milliseconds: 300),
           ),
           (route) => false,
         );
