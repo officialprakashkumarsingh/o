@@ -239,16 +239,16 @@ class _ChatSidebarState extends State<ChatSidebar> {
       ),
       child: Column(
         children: [
-          // Header
+          // Header with safe area padding
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 12, // Add safe area + extra padding
+              left: 16,
+              right: 16,
+              bottom: 16,
+            ),
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.dividerColor.withOpacity(0.1),
-                ),
-              ),
             ),
             child: Column(
               children: [
@@ -502,13 +502,6 @@ class _ChatSidebarState extends State<ChatSidebar> {
           // Footer
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: theme.dividerColor.withOpacity(0.1),
-                ),
-              ),
-            ),
             child: TextButton.icon(
               onPressed: () async {
                 final confirm = await showDialog<bool>(
