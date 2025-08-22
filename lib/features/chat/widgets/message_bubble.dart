@@ -114,35 +114,51 @@ class _MessageBubbleState extends State<MessageBubble>
       // Create a GlobalKey for the export widget
       final exportKey = GlobalKey();
       
-      // Create a custom widget for export with all context
-      await showDialog<void>(
+            // Create a custom widget for export with all context
+      final dialogContext = await showDialog<BuildContext?>(
         context: context,
         barrierColor: Colors.transparent,
-        builder: (context) => Stack(
-          children: [
-            Positioned(
-              left: -1000,
-              child: Material(
-                child: Container(
-                  width: 1200, // Increased width for better quality
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  child: RepaintBoundary(
-                    key: exportKey,
-                    child: _ExportMessageWidget(
-                      userMessage: userMessage,
-                      aiMessage: widget.message,
-                      aiModel: aiModel,
-                      timestamp: timestamp,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          // Schedule the capture and close after render
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (dialogContext.mounted) {
+              Navigator.of(dialogContext).pop(dialogContext);
+            }
+          });
+          
+          return Stack(
+            children: [
+              Positioned(
+                left: -2000,
+                top: 0,
+                child: Material(
+                  child: Container(
+                    width: 1200, // Increased width for better quality
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: RepaintBoundary(
+                      key: exportKey,
+                      child: _ExportMessageWidget(
+                        userMessage: userMessage,
+                        aiMessage: widget.message,
+                        aiModel: aiModel,
+                        timestamp: timestamp,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       );
-
-      // Wait for the widget to render
+      
+      if (dialogContext == null) {
+        throw Exception('Dialog context is null');
+      }
+      
+      // Wait a bit more to ensure rendering is complete
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Find and capture the export widget

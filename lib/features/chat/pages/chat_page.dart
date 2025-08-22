@@ -25,6 +25,7 @@ import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
 import '../../../core/services/quiz_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../shared/widgets/presentation_preview.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -414,6 +415,9 @@ class _ChatPageState extends State<ChatPage> {
     });
 
     _scrollToBottom();
+    
+    // Track message for ads
+    await AdService.instance.onMessageSent();
 
     // Get conversation history (last 10 conversations = 20 messages)
     final allHistory = _messages

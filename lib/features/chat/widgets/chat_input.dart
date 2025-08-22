@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/prompt_enhancer_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../shared/widgets/prompt_enhancer.dart';
 
 class ChatInput extends StatefulWidget {
@@ -404,9 +405,13 @@ class _ChatInputState extends State<ChatInput> {
         quizGenerationMode: _quizGenerationMode,
         onImageUpload: () async {
           Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
           await _handleImageUpload();
         },
-        onWebSearchToggle: (enabled) {
+        onWebSearchToggle: (enabled) async {
+          if (enabled) {
+            await AdService.instance.onExtensionFeatureUsed();
+          }
           setState(() {
             _webSearchEnabled = enabled;
             if (enabled) {
@@ -434,8 +439,9 @@ class _ChatInputState extends State<ChatInput> {
           });
           Navigator.pop(context);
         },
-        onEnhancePrompt: () {
+        onEnhancePrompt: () async {
           Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
           _showPromptEnhancer();
         },
         onDiagramToggle: (enabled) {
