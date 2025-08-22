@@ -78,7 +78,10 @@ class _ChatPageState extends State<ChatPage> {
   }
   
   void _onSessionChanged() {
-    _loadCurrentSession();
+    // Only reload if we're not currently sending a message
+    if (!_isLoading) {
+      _loadCurrentSession();
+    }
   }
   
   Future<void> _loadCurrentSession() async {
@@ -469,8 +472,10 @@ class _ChatPageState extends State<ChatPage> {
 
     // Ensure we have a session before proceeding
     if (ChatHistoryService.instance.currentSessionId == null) {
+      print('Creating new session for message');
       await ChatHistoryService.instance.getOrCreateActiveSession();
     }
+    print('Current session ID: ${ChatHistoryService.instance.currentSessionId}');
 
     final userMessage = Message.user(content.trim());
     setState(() {
@@ -541,18 +546,28 @@ Based on the above current information and search results, please provide a comp
       for (int i = 0; i < modelsToUse.length; i++) {
         final model = modelsToUse[i];
         
-        // Create assistant message for each model
-        final assistantMessage = Message.assistant('', isStreaming: true);
+        // Create assistant message for each model with unique ID
+        final assistantMessage = Message(
+          id: '${DateTime.now().millisecondsSinceEpoch}_${model}_$i',
+          content: '',
+          type: MessageType.assistant,
+          timestamp: DateTime.now(),
+          isStreaming: true,
+        );
+        
         setState(() {
           _messages.add(assistantMessage);
         });
+        
+        final messageIndex = _messages.length - 1;
+        print('Added assistant message at index: $messageIndex for model: $model');
         
         // Start response for this model
         await _handleModelResponse(
           enhancedContent,
           model,
           history,
-          _messages.length - 1,
+          messageIndex,
           modelsToUse.length,
           i,
         );
@@ -578,6 +593,7 @@ Based on the above current information and search results, please provide a comp
     int modelIndex,
   ) async {
     try {
+      print('Starting response for model: $model at index: $messageIndex');
       final stream = await ApiService.sendMessage(
         message: content,
         model: model,
@@ -593,19 +609,25 @@ Based on the above current information and search results, please provide a comp
       }
       
       int chunkCount = 0;
+      print('Starting to receive chunks for message at index: $messageIndex');
+      
       await for (final chunk in stream) {
-        if (!mounted) break;
-        
         accumulatedContent += chunk;
         chunkCount++;
         
-        if (messageIndex < _messages.length) {
+        if (chunkCount == 1) {
+          print('First chunk received: ${chunk.substring(0, chunk.length.clamp(0, 50))}...');
+        }
+        
+        if (mounted && messageIndex < _messages.length) {
           setState(() {
             _messages[messageIndex] = _messages[messageIndex].copyWith(
               content: accumulatedContent,
               isStreaming: true,
             );
           });
+        } else {
+          print('Warning: Cannot update message - mounted: $mounted, messageIndex: $messageIndex, messages.length: ${_messages.length}');
         }
         
         // Smooth auto-scroll during streaming
@@ -622,6 +644,8 @@ Based on the above current information and search results, please provide a comp
       }
 
       // Mark streaming as complete
+      print('Streaming complete. Total chunks: $chunkCount, Content length: ${accumulatedContent.length}');
+      
       if (mounted && messageIndex < _messages.length) {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -634,6 +658,7 @@ Based on the above current information and search results, please provide a comp
             _isLoading = false;
           }
         });
+        print('Message marked as complete at index: $messageIndex');
         
         // Save assistant message to history - don't await to avoid blocking
         if (messageIndex < _messages.length) {

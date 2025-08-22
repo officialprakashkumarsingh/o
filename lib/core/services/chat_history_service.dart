@@ -263,8 +263,8 @@ class ChatHistoryService extends ChangeNotifier {
         'model_name': modelName,
       });
       
-      // Reload sessions to update counts and last message
-      await loadSessions();
+      // Don't reload sessions here - it causes issues with streaming
+      // Just update the message count locally if needed
     } catch (e) {
       print('Error saving message: $e');
     }
