@@ -665,8 +665,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
               
               if (modelService.multipleModelsEnabled) ...[
                 const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
                 
                 Text(
                   'Selected Models (${modelService.selectedModels.length})',
@@ -796,8 +794,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
               ),
               
               if (imageService.multipleModelsEnabled) ...[
-                const SizedBox(height: 16),
-                const Divider(),
                 const SizedBox(height: 16),
                 
                 Text(
@@ -1019,11 +1015,26 @@ class _AboutBottomSheet extends StatelessWidget {
     final Uri emailUri = Uri(
       scheme: 'mailto',
       path: 'founder@ahamai.co',
-      query: 'subject=AhamAI Inquiry',
+      queryParameters: {
+        'subject': 'AhamAI Inquiry',
+      },
     );
     
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
+    try {
+      if (!await launchUrl(
+        emailUri,
+        mode: LaunchMode.externalApplication,
+      )) {
+        // If mailto fails, try with a different approach
+        final String emailUrl = 'mailto:founder@ahamai.co?subject=AhamAI%20Inquiry';
+        await launchUrl(
+          Uri.parse(emailUrl),
+          mode: LaunchMode.externalApplication,
+        );
+      }
+    } catch (e) {
+      // Handle error silently or show a snackbar if context is available
+      print('Could not launch email: $e');
     }
   }
 
@@ -1060,72 +1071,76 @@ class _AboutBottomSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Logo and Title
-                Row(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'AI',
-                          style: GoogleFonts.poppins(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: theme.colorScheme.primary,
-                          ),
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          RichText(
+                        child: Center(
+                          child: RichText(
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'Aham',
+                                  text: 'अ',
                                   style: GoogleFonts.poppins(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w600,
                                     color: theme.colorScheme.primary,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: 'AI',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.colorScheme.onSurface,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Text(
-                            'Version 1.0.0',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.5),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'अहम्',
+                              style: GoogleFonts.poppins(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            TextSpan(
+                              text: 'AI',
+                              style: GoogleFonts.inter(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Version 1.0.0',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 
                 const SizedBox(height: 24),
                 
                 // Description
-                Text(
-                  'About AhamAI',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Center(
+                  child: Text(
+                    'About',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
