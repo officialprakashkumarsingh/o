@@ -60,8 +60,15 @@ class _ChatPageState extends State<ChatPage> {
     ModelService.instance.loadModels();
     ImageService.instance.loadModels();
     _scrollController.addListener(_onScroll);
-    _loadCurrentSession();
+    _initializeSession();
     ChatHistoryService.instance.addListener(_onSessionChanged);
+  }
+  
+  Future<void> _initializeSession() async {
+    // Ensure we have an active session
+    await ChatHistoryService.instance.getOrCreateActiveSession();
+    // Then load any existing messages
+    _loadCurrentSession();
   }
   
   @override
@@ -460,6 +467,11 @@ class _ChatPageState extends State<ChatPage> {
     
     if (content.trim().isEmpty || modelsToUse.isEmpty || modelsToUse.first.isEmpty) return;
 
+    // Ensure we have a session before proceeding
+    if (ChatHistoryService.instance.currentSessionId == null) {
+      await ChatHistoryService.instance.getOrCreateActiveSession();
+    }
+
     final userMessage = Message.user(content.trim());
     setState(() {
       _messages.add(userMessage);
@@ -471,8 +483,10 @@ class _ChatPageState extends State<ChatPage> {
     // Track message for ads
     await AdService.instance.onMessageSent();
     
-    // Save user message to history
-    await ChatHistoryService.instance.saveMessage(userMessage);
+    // Save user message to history - don't await to avoid blocking
+    ChatHistoryService.instance.saveMessage(userMessage).catchError((e) {
+      print('Error saving user message: $e');
+    });
 
     // Get conversation history (last 10 conversations = 20 messages)
     final allHistory = _messages
@@ -621,11 +635,15 @@ Based on the above current information and search results, please provide a comp
           }
         });
         
-        // Save assistant message to history
-        await ChatHistoryService.instance.saveMessage(
-          _messages[messageIndex],
-          modelName: model,
-        );
+        // Save assistant message to history - don't await to avoid blocking
+        if (messageIndex < _messages.length) {
+          ChatHistoryService.instance.saveMessage(
+            _messages[messageIndex],
+            modelName: model,
+          ).catchError((e) {
+            print('Error saving assistant message: $e');
+          });
+        }
       }
     } catch (e) {
       if (mounted && messageIndex < _messages.length) {

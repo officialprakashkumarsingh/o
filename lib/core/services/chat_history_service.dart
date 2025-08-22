@@ -246,12 +246,14 @@ class ChatHistoryService extends ChangeNotifier {
   // Save message to current session
   Future<void> saveMessage(Message message, {String? modelName}) async {
     try {
+      // Don't create a new session here - it should already exist
       if (_currentSessionId == null) {
-        await getOrCreateActiveSession();
+        print('Warning: No active session for saving message');
+        return;
       }
       
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null || _currentSessionId == null) return;
+      if (userId == null) return;
       
       await _supabase.from('chat_messages').insert({
         'session_id': _currentSessionId,
