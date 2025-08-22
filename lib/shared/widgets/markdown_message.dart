@@ -45,7 +45,7 @@ class MarkdownMessage extends StatelessWidget {
       selectable: true,
       styleSheet: _buildMarkdownStyleSheet(context),
       builders: {
-        'code': CodeBlockBuilder(),
+        'code': CodeBlockBuilder(context),
       },
       onTapLink: (text, href, title) {
         // Handle link taps if needed
@@ -216,6 +216,10 @@ class MarkdownMessage extends StatelessWidget {
 }
 
 class CodeBlockBuilder extends MarkdownElementBuilder {
+  final BuildContext context;
+  
+  CodeBlockBuilder(this.context);
+  
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     if (element.tag == 'pre') {
@@ -231,14 +235,14 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         decoration: BoxDecoration(
-          color: Theme.of(element.context!).colorScheme.surfaceVariant.withOpacity(0.5),
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           element.textContent,
           style: GoogleFonts.jetBrainsMono(
             fontSize: 13,
-            color: Theme.of(element.context!).colorScheme.onSurface,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
       );

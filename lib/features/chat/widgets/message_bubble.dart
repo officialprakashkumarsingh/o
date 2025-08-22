@@ -109,8 +109,11 @@ class _MessageBubbleState extends State<MessageBubble>
       final aiModel = widget.aiModel ?? 'AI Assistant';
       final timestamp = widget.message.timestamp;
       
+      // Create a GlobalKey for the export widget
+      final exportKey = GlobalKey();
+      
       // Create a custom widget for export with all context
-      final exportWidget = await showDialog<Widget>(
+      await showDialog<void>(
         context: context,
         barrierColor: Colors.transparent,
         builder: (context) => Stack(
@@ -122,7 +125,7 @@ class _MessageBubbleState extends State<MessageBubble>
                   width: 800,
                   color: Theme.of(context).scaffoldBackgroundColor,
                   child: RepaintBoundary(
-                    key: GlobalKey(),
+                    key: exportKey,
                     child: _ExportMessageWidget(
                       userMessage: userMessage,
                       aiMessage: widget.message,
@@ -142,7 +145,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
       // Find and capture the export widget
       final RenderRepaintBoundary? boundary = 
-          (exportWidget as RepaintBoundary?)?.key?.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+          exportKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       
       if (boundary == null) {
         // Fallback to original message capture

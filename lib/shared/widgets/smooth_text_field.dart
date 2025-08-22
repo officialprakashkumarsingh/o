@@ -2,24 +2,30 @@ import 'package:flutter/material.dart';
 
 class SmoothTextField extends StatefulWidget {
   final TextEditingController controller;
-  final String label;
+  final String? label;
+  final String? hintText;
   final IconData? prefixIcon;
   final Widget? suffixIcon;
   final bool obscureText;
   final TextInputType keyboardType;
   final int maxLines;
-  final String? hintText;
+  final String? Function(String?)? validator;
+  final TextInputAction? textInputAction;
+  final void Function(String)? onFieldSubmitted;
 
   const SmoothTextField({
     super.key,
     required this.controller,
-    required this.label,
+    this.label,
+    this.hintText,
     this.prefixIcon,
     this.suffixIcon,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.maxLines = 1,
-    this.hintText,
+    this.validator,
+    this.textInputAction,
+    this.onFieldSubmitted,
   });
 
   @override
@@ -67,11 +73,14 @@ class _SmoothTextFieldState extends State<SmoothTextField>
               width: 1,
             ),
           ),
-          child: TextField(
+          child: TextFormField(
             controller: widget.controller,
             obscureText: widget.obscureText,
             keyboardType: widget.keyboardType,
             maxLines: widget.maxLines,
+            validator: widget.validator,
+            textInputAction: widget.textInputAction,
+            onFieldSubmitted: widget.onFieldSubmitted,
             style: Theme.of(context).textTheme.bodyMedium,
             decoration: InputDecoration(
               labelText: widget.label,
