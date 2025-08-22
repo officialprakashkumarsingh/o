@@ -304,7 +304,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  Icons.lock_outline,
+                                  Icons.lock_open,
                                   size: 12,
                                   color: theme.colorScheme.primary,
                                 ),

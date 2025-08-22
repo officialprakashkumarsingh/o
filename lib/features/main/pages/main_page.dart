@@ -4,9 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../theme/providers/theme_provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/chat_history_service.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../chat/pages/new_chat_page.dart';
 import '../../chat/widgets/model_selector_sheet.dart';
+import '../../chat/widgets/chat_sidebar.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/smooth_app_bar.dart';
 
@@ -21,6 +23,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   int _chatKey = 0; // Key to force rebuild chat page
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -39,6 +42,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     ));
     
     _animationController.forward();
+    
+    // Initialize chat history
+    ChatHistoryService.instance.initialize();
   }
 
   @override
@@ -53,29 +59,62 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     final user = AuthService.instance.currentUser;
     
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: ChatSidebar(
+        onSessionSelected: (sessionId) async {
+          // Switch to selected session
+          final messages = await ChatHistoryService.instance.switchToSession(sessionId);
+          // Rebuild chat page with new session
+          setState(() {
+            _chatKey++;
+          });
+        },
+        onNewChat: () async {
+          // Create new chat session
+          await ChatHistoryService.instance.createNewSession();
+          setState(() {
+            _chatKey++;
+          });
+        },
+      ),
       appBar: SmoothAppBar(
-        leading: GestureDetector(
-          onTap: () => _showProfile(),
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              icon: Icon(
+                Icons.menu,
+                color: theme.colorScheme.onSurface.withOpacity(0.7),
+              ),
             ),
-            child: Center(
-              child: Text(
-                user?.name.isNotEmpty == true 
-                    ? user!.name[0].toUpperCase() 
-                    : 'U',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
+            GestureDetector(
+              onTap: () => _showProfile(),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    user?.name.isNotEmpty == true 
+                        ? user!.name[0].toUpperCase() 
+                        : 'U',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+          ],
         ),
+        leadingWidth: 96,
         title: Center(
           child: GestureDetector(
             onTap: () => _showModelSelector(),
