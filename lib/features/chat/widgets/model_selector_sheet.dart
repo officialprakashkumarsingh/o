@@ -125,10 +125,8 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                                           : Colors.transparent,
                                       borderRadius: BorderRadius.circular(4),
                                       border: Border.all(
-                                        color: isSelected
-                                            ? Theme.of(context).colorScheme.primary
-                                            : Theme.of(context).colorScheme.outline,
-                                        width: 2,
+                                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                        width: 1,
                                       ),
                                     ),
                                     child: isSelected

@@ -193,35 +193,20 @@ class _ChatPageState extends State<ChatPage> {
           Text(
             '$greeting, $userName!',
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
               color: Theme.of(context).colorScheme.onBackground,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             'How can I help you today?',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
           
-          const SizedBox(height: 48),
-          Text(
-            'Start a conversation',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ask me anything and I\'ll help you out!',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 32),
           
           // Template shortcut button

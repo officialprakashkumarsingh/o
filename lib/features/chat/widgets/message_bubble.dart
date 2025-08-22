@@ -301,8 +301,9 @@ class _MessageBubbleState extends State<MessageBubble>
                     widget.message is! FlashcardMessage &&
                     widget.message is! QuizMessage) ...[
                   const SizedBox(height: 8),
-                  ThinkingIndicator(
+                  ThinkingAnimation(
                     color: Theme.of(context).colorScheme.primary,
+                    size: 8,
                   ),
                 ],
               ],
