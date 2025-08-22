@@ -22,7 +22,6 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  int _chatKey = 0; // Key to force rebuild chat page
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
@@ -62,19 +61,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       key: _scaffoldKey,
       drawer: ChatSidebar(
         onSessionSelected: (sessionId) async {
-          // Switch to selected session and reload chat
+          // Switch to selected session - the ChatPage will listen for changes
           await ChatHistoryService.instance.switchToSession(sessionId);
-          // Force rebuild of chat page with new key
-          setState(() {
-            _chatKey = DateTime.now().millisecondsSinceEpoch;
-          });
         },
         onNewChat: () async {
-          // Create new chat session
+          // Create new chat session - the ChatPage will listen for changes
           await ChatHistoryService.instance.createNewSession();
-          setState(() {
-            _chatKey = DateTime.now().millisecondsSinceEpoch;
-          });
         },
       ),
       appBar: SmoothAppBar(
@@ -162,9 +154,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
-        child: ChatPage(
-          key: ValueKey(_chatKey),
-        ),
+        child: const ChatPage(),
       ),
     );
   }

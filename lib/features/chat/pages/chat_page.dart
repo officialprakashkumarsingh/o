@@ -49,6 +49,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _showScrollToBottom = false;
   bool _userIsScrolling = false;
   bool _autoScrollEnabled = true;
+  bool _isLoadingHistory = false;
   
   // For stopping streams
   Stream<String>? _currentStream;
@@ -59,6 +60,64 @@ class _ChatPageState extends State<ChatPage> {
     ModelService.instance.loadModels();
     ImageService.instance.loadModels();
     _scrollController.addListener(_onScroll);
+    _loadCurrentSession();
+    ChatHistoryService.instance.addListener(_onSessionChanged);
+  }
+  
+  @override
+  void dispose() {
+    ChatHistoryService.instance.removeListener(_onSessionChanged);
+    _scrollController.dispose();
+    _inputController.dispose();
+    super.dispose();
+  }
+  
+  void _onSessionChanged() {
+    _loadCurrentSession();
+  }
+  
+  Future<void> _loadCurrentSession() async {
+    final sessionId = ChatHistoryService.instance.currentSessionId;
+    
+    if (!_isLoadingHistory) {
+      setState(() {
+        _isLoadingHistory = true;
+      });
+      
+      try {
+        if (sessionId != null) {
+          // Load messages for existing session
+          final messages = await ChatHistoryService.instance.loadSessionMessages(sessionId);
+          if (mounted) {
+            setState(() {
+              _messages.clear();
+              _messages.addAll(messages);
+              _isLoadingHistory = false;
+            });
+            
+            // Scroll to bottom after loading messages
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollController.hasClients && _messages.isNotEmpty) {
+                _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              }
+            });
+          }
+        } else {
+          // New session - clear messages
+          if (mounted) {
+            setState(() {
+              _messages.clear();
+              _isLoadingHistory = false;
+            });
+          }
+        }
+      } catch (e) {
+        print('Error loading session messages: $e');
+        setState(() {
+          _isLoadingHistory = false;
+        });
+      }
+    }
   }
 
   void _onScroll() {

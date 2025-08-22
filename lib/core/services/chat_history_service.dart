@@ -171,7 +171,7 @@ class ChatHistoryService extends ChangeNotifier {
       
       _currentSessionId = response['id'];
       await loadSessions();
-      notifyListeners();
+      notifyListeners(); // This will trigger the ChatPage to clear messages
       return _currentSessionId;
     } catch (e) {
       print('Error creating new session: $e');
