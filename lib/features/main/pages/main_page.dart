@@ -190,11 +190,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
   }
 
-  void _startNewChat() {
-    // Clear existing chat and start fresh
-    setState(() {
-      _chatKey++; // This will force ChatPage to rebuild and clear messages
-    });
+  void _startNewChat() async {
+    // Create a new chat session
+    await ChatHistoryService.instance.createNewSession();
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
