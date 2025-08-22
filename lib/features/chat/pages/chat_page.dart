@@ -402,11 +402,16 @@ class _ChatPageState extends State<ChatPage> {
 
     _scrollToBottom();
 
-    // Get conversation history
-    final history = _messages
+    // Get conversation history (last 10 conversations = 20 messages)
+    final allHistory = _messages
         .where((m) => !m.isStreaming && !m.hasError)
         .map((m) => m.toApiFormat())
         .toList();
+    
+    // Limit to last 20 messages (10 conversations) for memory efficiency
+    final history = allHistory.length > 20 
+        ? allHistory.sublist(allHistory.length - 20)
+        : allHistory;
 
     // Remove the last user message from history to avoid duplication
     if (history.isNotEmpty && history.last['role'] == 'user') {

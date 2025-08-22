@@ -905,7 +905,7 @@ class _CompactExtensionTile extends StatelessWidget {
               Icon(
                 icon,
                 size: 24,
-                color: Theme.of(context).colorScheme.primary,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
               const SizedBox(height: 4),
               Text(
@@ -913,7 +913,7 @@ class _CompactExtensionTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,

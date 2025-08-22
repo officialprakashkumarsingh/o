@@ -23,11 +23,11 @@ class _ThinkingAnimationState extends State<ThinkingAnimation>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
       vsync: this,
     );
 
-    // Create staggered animations for 3 dots
+    // Create wave-like animations for 3 dots
     _animations = List.generate(3, (index) {
       return Tween<double>(
         begin: 0.0,
@@ -36,15 +36,15 @@ class _ThinkingAnimationState extends State<ThinkingAnimation>
         CurvedAnimation(
           parent: _controller,
           curve: Interval(
-            index * 0.2,
-            0.6 + (index * 0.2),
-            curve: Curves.easeInOut,
+            index * 0.15,
+            0.4 + (index * 0.15),
+            curve: Curves.easeInOutCubic,
           ),
         ),
       );
     });
 
-    _controller.repeat();
+    _controller.repeat(reverse: true);
   }
 
   @override
@@ -58,34 +58,40 @@ class _ThinkingAnimationState extends State<ThinkingAnimation>
     final dotColor = widget.color ?? 
                     Theme.of(context).colorScheme.primary;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(3, (index) {
-        return AnimatedBuilder(
-          animation: _animations[index],
-          builder: (context, child) {
-            return Container(
-              margin: EdgeInsets.only(
-                right: index < 2 ? 4 : 0,
-              ),
-              child: Transform.scale(
-                scale: 0.5 + (_animations[index].value * 0.5),
-                child: Opacity(
-                  opacity: 0.3 + (_animations[index].value * 0.7),
+    return SizedBox(
+      height: widget.size,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(3, (index) {
+          return AnimatedBuilder(
+            animation: _animations[index],
+            builder: (context, child) {
+              return Container(
+                margin: EdgeInsets.symmetric(horizontal: widget.size * 0.15),
+                child: Transform.translate(
+                  offset: Offset(0, -_animations[index].value * widget.size * 0.5),
                   child: Container(
-                    width: widget.size,
-                    height: widget.size,
+                    width: widget.size * 0.6,
+                    height: widget.size * 0.6,
                     decoration: BoxDecoration(
-                      color: dotColor,
+                      color: dotColor.withOpacity(0.7 + (_animations[index].value * 0.3)),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: dotColor.withOpacity(0.3 * _animations[index].value),
+                          blurRadius: widget.size * 0.3,
+                          spreadRadius: widget.size * 0.1,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      }),
+              );
+            },
+          );
+        }),
+      ),
     );
   }
 }
