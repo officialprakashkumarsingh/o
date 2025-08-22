@@ -275,9 +275,9 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
         language: language,
       );
     } else if (element.tag == 'code') {
-      // Check if this is part of a pre block (handled above)
-      if (element.parent?.tag == 'pre') {
-        return null; // Let the pre handler deal with it
+      // Check if this code has children (means it's a code block, not inline)
+      if (element.children?.isNotEmpty == true) {
+        return null; // This is handled by the pre block
       }
       
       // This is inline code
