@@ -107,10 +107,6 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                                width: 1,
-                              ),
                             ),
                             child: Row(
                               children: [
@@ -124,10 +120,6 @@ class _ModelSelectorBottomSheetState extends State<ModelSelectorBottomSheet> {
                                           ? Theme.of(context).colorScheme.primary
                                           : Colors.transparent,
                                       borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                        color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                                        width: 1,
-                                      ),
                                     ),
                                     child: isSelected
                                         ? Icon(
