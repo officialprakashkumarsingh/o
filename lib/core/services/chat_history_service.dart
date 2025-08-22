@@ -11,6 +11,7 @@ class ChatSession {
   final bool isActive;
   final int messageCount;
   final String? lastUserMessage;
+  final bool? isPinned;
 
   ChatSession({
     required this.id,
@@ -20,6 +21,7 @@ class ChatSession {
     required this.isActive,
     required this.messageCount,
     this.lastUserMessage,
+    this.isPinned,
   });
 
   factory ChatSession.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class ChatSession {
       isActive: json['is_active'] ?? true,
       messageCount: json['message_count'] ?? 0,
       lastUserMessage: json['last_user_message'],
+      isPinned: json['is_pinned'] ?? false,
     );
   }
 
@@ -81,6 +84,7 @@ class ChatHistoryService extends ChangeNotifier {
           .from('chat_session_summaries')
           .select()
           .eq('user_id', userId)
+          .order('is_pinned', ascending: false)
           .order('updated_at', ascending: false);
       
       _sessions = (response as List)
@@ -301,6 +305,39 @@ class ChatHistoryService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       print('Error clearing sessions: $e');
+    }
+  }
+  
+  // Rename a session
+  Future<void> renameSession(String sessionId, String newTitle) async {
+    try {
+      await _supabase
+          .from('chat_sessions')
+          .update({'title': newTitle})
+          .eq('id', sessionId);
+      
+      await loadSessions();
+      notifyListeners();
+    } catch (e) {
+      print('Error renaming session: $e');
+    }
+  }
+  
+  // Toggle pin status of a session
+  Future<void> togglePinSession(String sessionId) async {
+    try {
+      final session = _sessions.firstWhere((s) => s.id == sessionId);
+      final newPinStatus = !(session.isPinned ?? false);
+      
+      await _supabase
+          .from('chat_sessions')
+          .update({'is_pinned': newPinStatus})
+          .eq('id', sessionId);
+      
+      await loadSessions();
+      notifyListeners();
+    } catch (e) {
+      print('Error toggling pin status: $e');
     }
   }
 }

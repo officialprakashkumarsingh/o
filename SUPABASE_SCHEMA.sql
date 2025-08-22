@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     is_active BOOLEAN DEFAULT true,
-    message_count INTEGER DEFAULT 0
+    message_count INTEGER DEFAULT 0,
+    is_pinned BOOLEAN DEFAULT false
 );
 
 -- Create chat_messages table
@@ -165,6 +166,7 @@ SELECT
     cs.updated_at,
     cs.is_active,
     cs.message_count,
+    cs.is_pinned,
     (
         SELECT content 
         FROM public.chat_messages 

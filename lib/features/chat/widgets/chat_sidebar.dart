@@ -66,6 +66,156 @@ class _ChatSidebarState extends State<ChatSidebar> {
     if (title.length <= 30) return title;
     return '${title.substring(0, 27)}...';
   }
+  
+  void _showSessionOptions(BuildContext context, ChatSession session) {
+    final theme = Theme.of(context);
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Session title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                session.title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Options
+            ListTile(
+              leading: Icon(
+                Icons.edit_outlined,
+                color: theme.colorScheme.onSurface,
+              ),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(context);
+                _showRenameDialog(context, session);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                session.isPinned ?? false
+                    ? Icons.push_pin
+                    : Icons.push_pin_outlined,
+                color: theme.colorScheme.onSurface,
+              ),
+              title: Text(session.isPinned ?? false ? 'Unpin' : 'Pin'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _historyService.togglePinSession(session.id);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Colors.red.withOpacity(0.7),
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Colors.red.withOpacity(0.7)),
+              ),
+              onTap: () async {
+                Navigator.pop(context);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Chat'),
+                    content: const Text(
+                      'Are you sure you want to delete this conversation?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                
+                if (confirm == true) {
+                  await _historyService.deleteSession(session.id);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showRenameDialog(BuildContext context, ChatSession session) {
+    final controller = TextEditingController(text: session.title);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rename Chat'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter new name',
+            border: OutlineInputBorder(),
+          ),
+          maxLength: 50,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newTitle = controller.text.trim();
+              if (newTitle.isNotEmpty && newTitle != session.title) {
+                await _historyService.renameSession(session.id, newTitle);
+                if (context.mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -153,25 +303,24 @@ class _ChatSidebarState extends State<ChatSidebar> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // New chat button
-                SizedBox(
-                  width: double.infinity,
+                // New chat button - smaller and rounded
+                Center(
                   child: ElevatedButton.icon(
                     onPressed: () {
                       widget.onNewChat();
                       Navigator.pop(context);
                     },
-                    icon: const Icon(Icons.add, size: 20),
-                    label: const Text('New Chat'),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('New Chat', style: TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: theme.colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                        horizontal: 20,
+                        vertical: 8,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                     ),
                   ),
@@ -269,48 +418,51 @@ class _ChatSidebarState extends State<ChatSidebar> {
                                     ? theme.colorScheme.primary.withOpacity(0.1)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8),
-                                child: InkWell(
-                                  onTap: () {
-                                    widget.onSessionSelected(session.id);
-                                    Navigator.pop(context);
-                                  },
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                            child: InkWell(
+                              onTap: () {
+                                widget.onSessionSelected(session.id);
+                                Navigator.pop(context);
+                              },
+                              onLongPress: () {
+                                _showSessionOptions(context, session);
+                              },
+                              borderRadius: BorderRadius.circular(8),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
                                       children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              Icons.chat_bubble_outline,
-                                              size: 16,
+                                        if (session.isPinned ?? false) ...[
+                                          Icon(
+                                            Icons.push_pin,
+                                            size: 14,
+                                            color: theme.colorScheme.primary
+                                                .withOpacity(0.7),
+                                          ),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        Expanded(
+                                          child: Text(
+                                            _truncateTitle(session.title),
+                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w500,
                                               color: isSelected
                                                   ? theme.colorScheme.primary
-                                                  : theme.colorScheme.onSurface
-                                                      .withOpacity(0.5),
+                                                  : theme.colorScheme.onSurface,
                                             ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                _truncateTitle(session.title),
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.w600
-                                                      : FontWeight.w500,
-                                                  color: isSelected
-                                                      ? theme.colorScheme.primary
-                                                      : theme.colorScheme.onSurface,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ],
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
+                                      ],
+                                    ),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [

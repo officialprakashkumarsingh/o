@@ -62,18 +62,18 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       key: _scaffoldKey,
       drawer: ChatSidebar(
         onSessionSelected: (sessionId) async {
-          // Switch to selected session
-          final messages = await ChatHistoryService.instance.switchToSession(sessionId);
-          // Rebuild chat page with new session
+          // Switch to selected session and reload chat
+          await ChatHistoryService.instance.switchToSession(sessionId);
+          // Force rebuild of chat page with new key
           setState(() {
-            _chatKey++;
+            _chatKey = DateTime.now().millisecondsSinceEpoch;
           });
         },
         onNewChat: () async {
           // Create new chat session
           await ChatHistoryService.instance.createNewSession();
           setState(() {
-            _chatKey++;
+            _chatKey = DateTime.now().millisecondsSinceEpoch;
           });
         },
       ),
@@ -157,15 +157,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
               ),
             ),
           ),
-          IconButton(
-            onPressed: () => _startNewChat(),
-            icon: Icon(
-              Icons.add_comment_outlined,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-            tooltip: 'New Chat',
-          ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
       ),
       body: FadeTransition(
