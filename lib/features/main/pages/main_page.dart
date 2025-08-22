@@ -78,43 +78,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         },
       ),
       appBar: SmoothAppBar(
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-              icon: Icon(
-                Icons.menu,
-                color: theme.colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-            GestureDetector(
-              onTap: () => _showProfile(),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    user?.name.isNotEmpty == true 
-                        ? user!.name[0].toUpperCase() 
-                        : 'U',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
+        leading: IconButton(
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+          icon: Icon(
+            Icons.menu,
+            color: theme.colorScheme.onSurface.withOpacity(0.7),
+          ),
         ),
-        leadingWidth: 96,
         title: Center(
           child: GestureDetector(
             onTap: () => _showModelSelector(),
@@ -163,6 +133,30 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           ),
         ),
         actions: [
+          GestureDetector(
+            onTap: () => _showProfile(),
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  user?.name.isNotEmpty == true 
+                      ? user!.name[0].toUpperCase() 
+                      : 'U',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             onPressed: () => _startNewChat(),
             icon: Icon(
