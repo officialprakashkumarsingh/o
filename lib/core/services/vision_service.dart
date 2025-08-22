@@ -64,7 +64,6 @@ class VisionService {
         'model': model,
         'messages': messages,
         'stream': false, // Vision API doesn't seem to support streaming properly
-        'max_tokens': 2000,
         'temperature': 0.7,
       };
 

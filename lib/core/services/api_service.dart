@@ -80,7 +80,6 @@ class ApiService {
         'model': model,
         'messages': messages,
         'stream': true,
-        'max_tokens': 4000,
         'temperature': 0.7,
       };
 
