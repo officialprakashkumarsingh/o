@@ -1,14 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/app_service.dart';
 import '../../main/pages/main_page.dart';
+import 'login_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Skip auth and go directly to main app
-    return const MainPage();
+    // Initialize auth service
+    AuthService.instance.initialize();
+    
+    return StreamBuilder(
+      stream: AppService.supabase.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        // Check if user is authenticated
+        final session = AppService.supabase.auth.currentSession;
+        
+        if (session != null) {
+          // User is logged in, go to main app
+          return const MainPage();
+        } else {
+          // User is not logged in, show login page
+          return const LoginPage();
+        }
+      },
+    );
   }
 }
 

@@ -5,17 +5,17 @@ import '../../../core/services/auth_service.dart';
 import '../../../shared/widgets/smooth_button.dart';
 import '../../../shared/widgets/smooth_text_field.dart';
 import '../../main/pages/main_page.dart';
-import 'signup_page.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class SignUpPage extends StatefulWidget {
+  const SignUpPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
@@ -56,12 +56,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   void dispose() {
     _animationController.dispose();
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
+  Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() {
@@ -69,7 +70,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     });
     
     try {
-      final user = await AuthService.instance.signIn(
+      final user = await AuthService.instance.signUp(
+        _nameController.text.trim(),
         _emailController.text.trim(),
         _passwordController.text,
       );
@@ -80,7 +82,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           (route) => false,
         );
       } else if (mounted) {
-        _showError('Invalid email or password');
+        _showError('Sign up failed. Please try again.');
       }
     } catch (e) {
       if (mounted) {
@@ -127,7 +129,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 40),
                     
                     // Logo and Title
                     Center(
@@ -178,14 +180,33 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     
                     Center(
                       child: Text(
-                        'Welcome back',
+                        'Create your account',
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: theme.colorScheme.onBackground.withOpacity(0.6),
                         ),
                       ),
                     ),
                     
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 40),
+                    
+                    // Name Field
+                    SmoothTextField(
+                      controller: _nameController,
+                      hintText: 'Full Name',
+                      prefixIcon: Icons.person_outline,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your name';
+                        }
+                        if (value.length < 2) {
+                          return 'Name must be at least 2 characters';
+                        }
+                        return null;
+                      },
+                      textInputAction: TextInputAction.next,
+                    ),
+                    
+                    const SizedBox(height: 16),
                     
                     // Email Field
                     SmoothTextField(
@@ -226,7 +247,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
+                          return 'Please enter a password';
                         }
                         if (value.length < 6) {
                           return 'Password must be at least 6 characters';
@@ -234,14 +255,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         return null;
                       },
                       textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _signIn(),
+                      onFieldSubmitted: (_) => _signUp(),
                     ),
                     
                     const SizedBox(height: 32),
                     
-                    // Sign In Button
+                    // Sign Up Button
                     SmoothButton(
-                      onPressed: _isLoading ? null : _signIn,
+                      onPressed: _isLoading ? null : _signUp,
                       child: _isLoading
                           ? SizedBox(
                               height: 20,
@@ -254,7 +275,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             )
                           : Text(
-                              'Sign In',
+                              'Sign Up',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -265,23 +286,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     
                     const SizedBox(height: 24),
                     
-                    // Don't have account
+                    // Already have account
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Don't have an account? ",
+                          'Already have an account? ',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onBackground.withOpacity(0.6),
                           ),
                         ),
                         TextButton(
                           onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const SignUpPage(),
-                              ),
-                            );
+                            Navigator.of(context).pop();
                           },
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
@@ -289,7 +306,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           child: Text(
-                            'Sign Up',
+                            'Sign In',
                             style: TextStyle(
                               color: theme.colorScheme.primary,
                               fontWeight: FontWeight.w600,
