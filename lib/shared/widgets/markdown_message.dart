@@ -6,6 +6,7 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/services/diagram_service.dart';
 import 'diagram_preview.dart';
 
