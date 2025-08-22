@@ -21,7 +21,7 @@ import '../../../core/services/diagram_service.dart';
 import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
 import '../../../core/services/quiz_service.dart';
-import '../../../shared/widgets/animated_robot.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../shared/widgets/presentation_preview.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -170,71 +170,44 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildEmptyState() {
+    final user = AuthService.instance.currentUser;
+    final userName = user?.name ?? 'there';
     String greeting = '';
     final hour = DateTime.now().hour;
     
     if (hour >= 5 && hour < 12) {
-      greeting = 'Good morning! ☀️';
+      greeting = 'Good morning';
     } else if (hour >= 12 && hour < 17) {
-      greeting = 'Good afternoon! 🌤️';
+      greeting = 'Good afternoon';
     } else if (hour >= 17 && hour < 21) {
-      greeting = 'Good evening! 🌅';
+      greeting = 'Good evening';
     } else {
-      greeting = 'Good night! 🌙';
+      greeting = 'Good night';
     }
     
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Greeting bubble
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-              ),
+          // Simple greeting text without background
+          Text(
+            '$greeting, $userName!',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onBackground,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  greeting,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Ready to help you!',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'How can I help you today?',
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
           
-          // Robot
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: AnimatedRobot(
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 48),
           Text(
             'Start a conversation',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(

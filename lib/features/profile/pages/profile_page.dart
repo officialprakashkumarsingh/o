@@ -189,24 +189,21 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                     const SizedBox(height: 32),
                     
                     // Sign Out Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton(
+                    Center(
+                      child: TextButton(
                         onPressed: _signOut,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: theme.colorScheme.error.withOpacity(0.5),
-                          ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                         child: Text(
                           'Sign Out',
                           style: TextStyle(
-                            color: theme.colorScheme.error,
-                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
                           ),
                         ),
                       ),

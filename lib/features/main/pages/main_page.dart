@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../theme/providers/theme_provider.dart';
+import '../../../core/services/auth_service.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../chat/pages/new_chat_page.dart';
 import '../../chat/widgets/model_selector_sheet.dart';
@@ -48,15 +49,32 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final user = AuthService.instance.currentUser;
+    
     return Scaffold(
       appBar: SmoothAppBar(
-        leading: IconButton(
-          onPressed: () => _showProfile(),
-          icon: Icon(
-            Icons.person_outline,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+        leading: GestureDetector(
+          onTap: () => _showProfile(),
+          child: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                user?.name.isNotEmpty == true 
+                    ? user!.name[0].toUpperCase() 
+                    : 'U',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ),
           ),
-          tooltip: 'Profile',
         ),
         title: Center(
           child: GestureDetector(
