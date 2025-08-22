@@ -19,6 +19,7 @@ import '../../../core/models/presentation_message_model.dart';
 import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
+import '../../../core/models/web_search_message_model.dart';
 import '../../../core/services/diagram_service.dart';
 import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
@@ -351,12 +352,18 @@ class _ChatPageState extends State<ChatPage> {
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
-      HapticFeedback.lightImpact();
+      // Use jumpTo for instant scrolling during streaming for better performance
+      if (_isLoading) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      } else {
+        // Use smooth animation when not streaming
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+        HapticFeedback.lightImpact();
+      }
     }
   }
 
@@ -424,8 +431,11 @@ class _ChatPageState extends State<ChatPage> {
       // Handle web search if enabled
       String enhancedContent = content.trim();
       if (useWebSearch) {
-        // Show searching indicator
-        final searchingMessage = Message.assistant('🔍 Searching the web...', isStreaming: true);
+        // Show searching indicator with shimmer
+        final searchingMessage = WebSearchMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString() + '_search',
+          isSearching: true,
+        );
         setState(() {
           _messages.add(searchingMessage);
         });
@@ -523,20 +533,12 @@ Based on the above current information and search results, please provide a comp
         
         // Smooth auto-scroll during streaming
         if (chunkCount % 2 == 0) {
+          // Use next frame for smoother updates
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Only auto-scroll if user hasn't manually scrolled away
             if (_autoScrollEnabled && _scrollController.hasClients && !_userIsScrolling) {
-              final maxScroll = _scrollController.position.maxScrollExtent;
-              final currentScroll = _scrollController.offset;
-              
-              // Smooth scroll to bottom if we're close (within 200 pixels)
-              if (maxScroll - currentScroll < 200) {
-                _scrollController.animateTo(
-                  maxScroll,
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.linear,
-                );
-              }
+              // Jump to bottom instantly during streaming for ultra smooth experience
+              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
             }
           });
         }
@@ -1324,15 +1326,6 @@ Format the response as:
       _messages.add(userMessage);
     });
     
-    // Show loading dialog
-    _showGenerationLoadingDialog(
-      context: context,
-      title: 'Generating Flashcards',
-      subtitle: 'Creating study materials',
-      icon: Icons.style_outlined,
-      tip: 'AI is preparing your flashcards',
-    );
-    
     // Generate flashcard prompt
     final flashcardPrompt = '''
 Generate flashcards for: $prompt
@@ -1401,9 +1394,6 @@ Generate 5-10 flashcards covering key concepts.
               finalFlashcards = FlashcardService.generateSampleFlashcards(prompt);
             }
             
-            // Close loading dialog
-            if (mounted) Navigator.of(context).pop();
-            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1417,9 +1407,6 @@ Generate 5-10 flashcards covering key concepts.
         },
         onError: (error) {
           if (mounted) {
-            // Close loading dialog
-            Navigator.of(context).pop();
-            
             // Generate sample flashcards on error
             final sampleFlashcards = FlashcardService.generateSampleFlashcards(prompt);
             
@@ -1437,9 +1424,6 @@ Generate 5-10 flashcards covering key concepts.
         },
       );
     } catch (e) {
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-      
       // Generate sample on exception
       final sampleFlashcards = FlashcardService.generateSampleFlashcards(prompt);
       
@@ -1471,15 +1455,6 @@ Generate 5-10 flashcards covering key concepts.
     setState(() {
       _messages.add(userMessage);
     });
-    
-    // Show loading dialog
-    _showGenerationLoadingDialog(
-      context: context,
-      title: 'Generating Quiz',
-      subtitle: 'Creating questions',
-      icon: Icons.quiz_outlined,
-      tip: 'AI is preparing your quiz',
-    );
     
     // Generate quiz prompt
     final quizPrompt = '''
@@ -1550,9 +1525,6 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
               finalQuestions = QuizService.generateSampleQuiz(prompt);
             }
             
-            // Close loading dialog
-            Navigator.of(context).pop();
-            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1566,9 +1538,6 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
         },
         onError: (error) {
           if (mounted) {
-            // Close loading dialog
-            Navigator.of(context).pop();
-            
             // Generate sample quiz on error
             final sampleQuestions = QuizService.generateSampleQuiz(prompt);
             
@@ -1586,9 +1555,6 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
         },
       );
     } catch (e) {
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-      
       // Generate sample on exception
       final sampleQuestions = QuizService.generateSampleQuiz(prompt);
       

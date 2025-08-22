@@ -15,6 +15,7 @@ import '../../../core/models/presentation_message_model.dart';
 import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
+import '../../../core/models/web_search_message_model.dart';
 import '../../../shared/widgets/markdown_message.dart';
 import '../../../shared/widgets/thinking_animation.dart';
 import '../../../shared/widgets/diagram_preview.dart';
@@ -282,6 +283,8 @@ class _MessageBubbleState extends State<MessageBubble>
                   _buildFlashcardContent(widget.message as FlashcardMessage),
                 ] else if (widget.message is QuizMessage) ...[
                   _buildQuizContent(widget.message as QuizMessage),
+                ] else if (widget.message is WebSearchMessage) ...[
+                  _buildWebSearchContent(widget.message as WebSearchMessage),
                 ] else ...[
                   // Regular message content with markdown support
                   MarkdownMessage(
@@ -844,6 +847,134 @@ class _MessageBubbleState extends State<MessageBubble>
         ),
       );
     }
+  }
+
+  Widget _buildWebSearchContent(WebSearchMessage message) {
+    if (message.isSearching) {
+      return _WebSearchShimmer();
+    } else {
+      return MarkdownMessage(
+        content: message.content,
+        isUserMessage: false,
+      );
+    }
+  }
+}
+
+class _WebSearchShimmer extends StatefulWidget {
+  @override
+  _WebSearchShimmerState createState() => _WebSearchShimmerState();
+}
+
+class _WebSearchShimmerState extends State<_WebSearchShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -2.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.search,
+                  size: 16,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                        theme.colorScheme.primary.withOpacity(0.8),
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                      ],
+                      stops: [
+                        0.0,
+                        0.5,
+                        1.0,
+                      ],
+                      transform: GradientRotation(_shimmerAnimation.value),
+                    ).createShader(bounds);
+                  },
+                  child: Text(
+                    'Searching the web...',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Shimmer bars
+            ...List.generate(3, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  height: 12,
+                  width: 150 + (index * 30),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.surfaceVariant,
+                        theme.colorScheme.surfaceVariant,
+                        theme.colorScheme.primary.withOpacity(0.1),
+                        theme.colorScheme.surfaceVariant,
+                        theme.colorScheme.surfaceVariant,
+                      ],
+                      stops: [
+                        0.0,
+                        _shimmerAnimation.value - 0.3,
+                        _shimmerAnimation.value,
+                        _shimmerAnimation.value + 0.3,
+                        1.0,
+                      ].map((stop) => stop.clamp(0.0, 1.0)).toList(),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
   }
 }
 
