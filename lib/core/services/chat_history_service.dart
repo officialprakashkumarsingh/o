@@ -57,7 +57,11 @@ class ChatHistoryService extends ChangeNotifier {
   
   ChatHistoryService._internal();
 
-  final _supabase = AppService.supabase;
+  SupabaseClient? _supabase;
+  SupabaseClient get supabase {
+    _supabase ??= AppService.supabase;
+    return _supabase!;
+  }
   
   String? _currentSessionId;
   List<ChatSession> _sessions = [];
@@ -79,7 +83,7 @@ class ChatHistoryService extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
       
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
       
       final response = await _supabase
@@ -105,7 +109,7 @@ class ChatHistoryService extends ChangeNotifier {
   // Get or create active session
   Future<String?> getOrCreateActiveSession() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return null;
       
       // Check for existing active session
@@ -149,7 +153,7 @@ class ChatHistoryService extends ChangeNotifier {
   // Create new chat session
   Future<String?> createNewSession() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return null;
       
       // Deactivate current session
@@ -184,7 +188,7 @@ class ChatHistoryService extends ChangeNotifier {
   // Switch to a different session
   Future<List<Message>> switchToSession(String sessionId) async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return [];
       
       // Deactivate current session
@@ -274,10 +278,10 @@ class ChatHistoryService extends ChangeNotifier {
         return;
       }
       
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
       
-      await _supabase.from('chat_messages').insert({
+      await supabase.from('chat_messages').insert({
         'session_id': _currentSessionId,
         'user_id': userId,
         'content': message.content,
@@ -315,7 +319,7 @@ class ChatHistoryService extends ChangeNotifier {
   // Clear all sessions for current user
   Future<void> clearAllSessions() async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
+      final userId = supabase.auth.currentUser?.id;
       if (userId == null) return;
       
       await _supabase

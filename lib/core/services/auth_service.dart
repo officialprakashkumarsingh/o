@@ -10,7 +10,11 @@ class AuthService {
   
   AuthService._internal();
 
-  final _supabase = AppService.supabase;
+  SupabaseClient? _supabase;
+  SupabaseClient get supabase {
+    _supabase ??= AppService.supabase;
+    return _supabase!;
+  }
   
   final StreamController<app_models.User?> _userController = StreamController<app_models.User?>.broadcast();
   Stream<app_models.User?> get userStream => _userController.stream;
@@ -18,11 +22,21 @@ class AuthService {
   app_models.User? _currentUser;
   app_models.User? get currentUser => _currentUser;
   
-  bool get isAuthenticated => _supabase.auth.currentUser != null;
+  bool get isAuthenticated {
+    try {
+      return supabase.auth.currentUser != null;
+    } catch (e) {
+      return false;
+    }
+  }
 
   Future<void> initialize() async {
-    // Listen to auth state changes
-    _supabase.auth.onAuthStateChange.listen((data) {
+    try {
+      // Get Supabase client
+      _supabase = AppService.supabase;
+      
+      // Listen to auth state changes
+      _supabase!.auth.onAuthStateChange.listen((data) {
       final user = data.session?.user;
       if (user != null) {
         _currentUser = app_models.User(
@@ -39,7 +53,7 @@ class AuthService {
     });
     
     // Check if user is already logged in
-    final user = _supabase.auth.currentUser;
+    final user = _supabase!.auth.currentUser;
     if (user != null) {
       _currentUser = app_models.User(
         id: user.id,
@@ -49,11 +63,15 @@ class AuthService {
       );
       _userController.add(_currentUser);
     }
+    } catch (e) {
+      print('Error initializing AuthService: $e');
+      // Continue without auth if Supabase is not available
+    }
   }
 
   Future<app_models.User?> signIn(String email, String password) async {
     try {
-      final response = await _supabase.auth.signInWithPassword(
+      final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
@@ -81,7 +99,7 @@ class AuthService {
 
   Future<app_models.User?> signUp(String name, String email, String password) async {
     try {
-      final response = await _supabase.auth.signUp(
+      final response = await supabase.auth.signUp(
         email: email,
         password: password,
         data: {'name': name}, // Store name in user metadata
@@ -110,7 +128,7 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      await _supabase.auth.signOut();
+      await supabase.auth.signOut();
       _currentUser = null;
       _userController.add(null);
     } catch (e) {

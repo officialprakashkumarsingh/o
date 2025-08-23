@@ -7,9 +7,20 @@ import 'ad_service.dart';
 
 class AppService {
   static SharedPreferences? _prefs;
+  static SupabaseClient? _supabaseClient;
   
   static SharedPreferences get prefs => _prefs!;
-  static final supabase = Supabase.instance.client;
+  static SupabaseClient get supabase {
+    if (_supabaseClient != null) {
+      return _supabaseClient!;
+    }
+    
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase not initialized. Please ensure AppService.initialize() is called first.');
+    }
+  }
   
   static Future<void> initialize() async {
     try {
@@ -20,10 +31,12 @@ class AppService {
         url: SupabaseConfig.supabaseUrl,
         anonKey: SupabaseConfig.supabaseAnonKey,
       );
+      _supabaseClient = Supabase.instance.client;
       print('Supabase initialized successfully');
     } catch (e) {
       print('Error initializing Supabase: $e');
       // Continue without Supabase if it fails
+      _supabaseClient = null;
     }
     
     try {
