@@ -532,9 +532,9 @@ class _ChatPageState extends State<ChatPage> {
         
         // Get the stream using static method
         final stream = await ApiService.sendMessage(
-          fileContent, // Send the actual file content
+          message: fileContent, // Send the actual file content
           model: model,
-          history: history,
+          conversationHistory: history,
         );
         
         // Process the stream
