@@ -14,11 +14,19 @@ void main() async {
   
   // Load environment variables (optional - will use defaults if not found)
   try {
-    await dotenv.load(fileName: ".env");
-    print('Environment variables loaded successfully');
+    // Try to load from assets first (for release builds)
+    try {
+      await dotenv.load();
+      print('Environment variables loaded from assets successfully');
+    } catch (e) {
+      // If not in assets, try to load from file system (for debug builds)
+      await dotenv.load(fileName: ".env");
+      print('Environment variables loaded from file system successfully');
+    }
   } catch (e) {
     print('Warning: Could not load .env file, using default values');
     print('Error: $e');
+    // Continue without environment variables - will use hardcoded defaults
   }
   
   // Initialize core services
