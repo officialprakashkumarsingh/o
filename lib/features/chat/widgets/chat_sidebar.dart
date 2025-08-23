@@ -20,6 +20,7 @@ class ChatSidebar extends StatefulWidget {
 class _ChatSidebarState extends State<ChatSidebar> {
   final _historyService = ChatHistoryService.instance;
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isLoadingMessages = false;
@@ -36,18 +37,24 @@ class _ChatSidebarState extends State<ChatSidebar> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
     _historyService.removeListener(_onHistoryChanged);
     super.dispose();
   }
   
   void _onSearchChanged() {
-    setState(() {
-      _searchQuery = _searchController.text.toLowerCase();
-    });
+    final newQuery = _searchController.text.toLowerCase();
     
-    // Load all messages for deep search if query is not empty
-    if (_searchQuery.isNotEmpty && !_isLoadingMessages) {
-      _loadAllMessages();
+    // Only update state if query actually changed
+    if (_searchQuery != newQuery) {
+      setState(() {
+        _searchQuery = newQuery;
+      });
+      
+      // Load all messages for deep search if query is not empty
+      if (_searchQuery.isNotEmpty && !_isLoadingMessages) {
+        _loadAllMessages();
+      }
     }
   }
   
@@ -62,6 +69,9 @@ class _ChatSidebarState extends State<ChatSidebar> {
   Future<void> _loadAllMessages() async {
     if (_isLoadingMessages) return;
     
+    // Remember if search field had focus
+    final hadFocus = _searchFocusNode.hasFocus;
+    
     setState(() {
       _isLoadingMessages = true;
     });
@@ -72,6 +82,11 @@ class _ChatSidebarState extends State<ChatSidebar> {
       setState(() {
         _isLoadingMessages = false;
       });
+      
+      // Restore focus if it was lost
+      if (hadFocus && !_searchFocusNode.hasFocus) {
+        _searchFocusNode.requestFocus();
+      }
     }
   }
   
@@ -456,31 +471,32 @@ class _ChatSidebarState extends State<ChatSidebar> {
                               color: theme.colorScheme.onSurface.withOpacity(0.5),
                             ),
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          style: theme.textTheme.bodyMedium,
-                          decoration: InputDecoration(
-                            hintText: 'Search chats and messages...',
-                            hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.4),
+                                              Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _searchFocusNode,
+                            style: theme.textTheme.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: 'Search chats and messages...',
+                              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                              ),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
                             ),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            onTap: () {
+                              setState(() {
+                                _isSearching = true;
+                              });
+                            },
+                            onChanged: (value) {
+                              // Search is handled by the listener
+                            },
                           ),
-                          onTap: () {
-                            setState(() {
-                              _isSearching = true;
-                            });
-                          },
-                          onChanged: (value) {
-                            // Search is handled by the listener
-                          },
                         ),
-                      ),
                       if (_searchController.text.isNotEmpty)
                         IconButton(
                           icon: Icon(

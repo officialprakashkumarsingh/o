@@ -502,6 +502,7 @@ class _MessageBubbleState extends State<MessageBubble>
           width: 280,
           height: 280,
           fit: BoxFit.cover,
+          gaplessPlayback: true, // Prevent blinking
           errorBuilder: (context, error, stackTrace) {
             return _buildImageError();
           },
@@ -511,12 +512,15 @@ class _MessageBubbleState extends State<MessageBubble>
       }
     }
     
-    // Handle regular network URLs
+    // Handle regular network URLs with caching
     return Image.network(
       imageUrl,
       width: 200,
       height: 200,
       fit: BoxFit.cover,
+      gaplessPlayback: true, // Prevent blinking during rebuild
+      cacheWidth: 400, // Cache at reasonable resolution
+      cacheHeight: 400,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return Container(

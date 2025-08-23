@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../../core/services/prompt_enhancer_service.dart';
 import '../../../core/services/ad_service.dart';
+import '../../../core/services/pdf_service.dart';
 import '../../../shared/widgets/prompt_enhancer.dart';
 
 class ChatInput extends StatefulWidget {
@@ -408,6 +410,11 @@ class _ChatInputState extends State<ChatInput> {
           await AdService.instance.onExtensionFeatureUsed();
           await _handleImageUpload();
         },
+        onPdfUpload: () async {
+          Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
+          await _handlePdfUpload();
+        },
         onWebSearchToggle: (enabled) async {
           if (enabled) {
             await AdService.instance.onExtensionFeatureUsed();
@@ -570,6 +577,85 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
+  Future<void> _handlePdfUpload() async {
+    try {
+      // Pick PDF file
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        allowMultiple: false,
+      );
+      
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      
+      final file = File(result.files.single.path!);
+      final fileName = result.files.single.name;
+      
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Extracting PDF content...'),
+            ],
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
+      
+      // Extract text from PDF
+      final extractedText = await PdfService.extractTextFromPdf(file);
+      
+      // Clear loading indicator
+      ScaffoldMessenger.of(context).clearSnackBars();
+      
+      if (extractedText.isEmpty || extractedText.startsWith('Error')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(extractedText.isEmpty ? 'Could not extract text from PDF' : extractedText),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+        return;
+      }
+      
+      // Format the content for AI
+      final formattedContent = PdfService.formatPdfContent(fileName, extractedText);
+      
+      // Set the text in the input field
+      _controller.text = formattedContent;
+      _updateSendButton();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('PDF "$fileName" loaded successfully'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to process PDF: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
   bool _isAnyExtensionActive() {
     return _imageGenerationMode || 
            _diagramGenerationMode || 
@@ -638,6 +724,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
   final bool flashcardGenerationMode;
   final bool quizGenerationMode;
   final VoidCallback onImageUpload;
+  final VoidCallback onPdfUpload;
   final Function(bool) onWebSearchToggle;
   final Function(bool) onImageModeToggle;
   final Function(bool) onDiagramToggle;
@@ -656,6 +743,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
     this.flashcardGenerationMode = false,
     this.quizGenerationMode = false,
     required this.onImageUpload,
+    required this.onPdfUpload,
     required this.onWebSearchToggle,
     required this.onImageModeToggle,
     required this.onDiagramToggle,
@@ -700,14 +788,39 @@ class _ExtensionsBottomSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // First row
+                // First row - File operations only
                 Row(
                   children: [
                     Expanded(
                       child: _CompactExtensionTile(
-                        icon: Icons.photo_camera_outlined,
-                        title: 'Analyze',
+                        icon: Icons.image_outlined,
+                        title: 'Analyze Image',
                         onTap: onImageUpload,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactExtensionTile(
+                        icon: Icons.picture_as_pdf_outlined,
+                        title: 'Upload PDF',
+                        onTap: onPdfUpload,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Second row - Search, Enhance, and Image generation
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ExtensionTile(
+                        icon: Icons.search_outlined,
+                        title: 'Search',
+                        subtitle: '',
+                        isToggled: webSearchEnabled,
+                        onTap: () => onWebSearchToggle(!webSearchEnabled),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -721,23 +834,6 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _ExtensionTile(
-                        icon: Icons.search_outlined,
-                        title: 'Search',
-                        subtitle: '',
-                        isToggled: webSearchEnabled,
-                        onTap: () => onWebSearchToggle(!webSearchEnabled),
-                      ),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 10),
-                
-                // Second row - Generation modes
-                Row(
-                  children: [
-                    Expanded(
-                      child: _ExtensionTile(
                         icon: Icons.auto_awesome_outlined,
                         title: 'Image',
                         subtitle: '',
@@ -745,7 +841,14 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                         onTap: () => onImageModeToggle(!imageGenerationMode),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                  ],
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Third row - Diagram, Chart, Presentation
+                Row(
+                  children: [
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.account_tree_outlined,
@@ -765,24 +868,24 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                         onTap: () => onChartToggle(!chartGenerationMode),
                       ),
                     ),
-                  ],
-                ),
-                
-                const SizedBox(height: 10),
-                
-                // Third row - Presentation, Flashcards, Quiz
-                Row(
-                  children: [
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.slideshow_outlined,
-                        title: 'Presentation',
+                        title: 'Slides',
                         subtitle: '',
                         isToggled: presentationGenerationMode,
                         onTap: () => onPresentationToggle(!presentationGenerationMode),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                  ],
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Fourth row - Flashcards and Quiz
+                Row(
+                  children: [
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.style_outlined,
@@ -802,6 +905,8 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                         onTap: () => onQuizToggle(!quizGenerationMode),
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Container()), // Empty space for alignment
                   ],
                 ),
               ],
