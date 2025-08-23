@@ -62,10 +62,7 @@ class FileExtractorService {
         return 'Could not extract text from the PDF. The file might be image-based or empty.';
       }
       
-      // Limit content for very large files
-      if (extractedText.length > 50000) {
-        extractedText = extractedText.substring(0, 50000) + '\n\n[Content truncated due to size limits]';
-      }
+      // No truncation - handle full content
       
       return extractedText.trim();
     } catch (e) {
@@ -78,10 +75,7 @@ class FileExtractorService {
     try {
       String content = await textFile.readAsString();
       
-      // Limit content for very large files
-      if (content.length > 50000) {
-        content = content.substring(0, 50000) + '\n\n[Content truncated due to size limits]';
-      }
+      // No truncation - handle full content
       
       return content;
     } catch (e) {
@@ -112,13 +106,8 @@ class FileExtractorService {
           // Extract content based on file type
           if (supportedTextExtensions.contains(extension)) {
             final content = String.fromCharCodes(file.content);
-            // Limit content per file
-            if (content.length > 10000) {
-              buffer.writeln(content.substring(0, 10000));
-              buffer.writeln('[Content truncated]');
-            } else {
-              buffer.writeln(content);
-            }
+            // No truncation - include full content
+            buffer.writeln(content);
           } else {
             buffer.writeln('[Binary file - content not extracted]');
           }
@@ -127,11 +116,7 @@ class FileExtractorService {
           buffer.writeln('---');
           buffer.writeln();
           
-          // Limit total files processed
-          if (fileCount >= 20) {
-            buffer.writeln('[Additional files truncated - ZIP contains more files]');
-            break;
-          }
+          // No file limit - process all files in ZIP
         }
       }
       

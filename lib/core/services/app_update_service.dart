@@ -82,17 +82,52 @@ class AppUpdateService {
       final fileName = 'ahamai_update_${DateTime.now().millisecondsSinceEpoch}.apk';
       final savePath = '${dir!.path}/$fileName';
       
-      // Download the APK
-      await dio.download(
+      // Delete the file if it already exists
+      final file = File(savePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      
+      print('Downloading APK from: $downloadUrl');
+      print('Saving to: $savePath');
+      
+      // Start with 0 progress
+      onProgress(0.0);
+      
+      // Download the APK with better error handling
+      final response = await dio.download(
         downloadUrl,
         savePath,
         onReceiveProgress: (received, total) {
-          if (total != -1) {
+          if (total != -1 && total > 0) {
             final progress = received / total;
+            print('Download progress: ${(progress * 100).toInt()}%');
             onProgress(progress);
+          } else {
+            // If total is unknown, show indeterminate progress
+            onProgress(received > 0 ? 0.5 : 0.0);
           }
         },
+        options: Options(
+          receiveTimeout: const Duration(minutes: 10),
+          sendTimeout: const Duration(seconds: 30),
+        ),
       );
+      
+      // Ensure download completed
+      if (response.statusCode != 200) {
+        throw Exception('Download failed with status: ${response.statusCode}');
+      }
+      
+      // Verify file exists and has content
+      if (!await file.exists() || await file.length() == 0) {
+        throw Exception('Downloaded file is invalid or empty');
+      }
+      
+      print('Download completed. File size: ${await file.length()} bytes');
+      
+      // Small delay to ensure file is fully written
+      await Future.delayed(const Duration(milliseconds: 500));
       
       // Open the APK for installation
       final result = await OpenFile.open(savePath);

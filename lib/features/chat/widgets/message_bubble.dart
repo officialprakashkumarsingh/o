@@ -446,42 +446,9 @@ class _MessageBubbleState extends State<MessageBubble>
         
         const SizedBox(height: 12),
         
-        // Image or loading state
+                // Image or loading state
         if (imageMessage.isGenerating)
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Generating...',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          )
+          _ImageGenerationShimmer()
         else if (imageMessage.imageUrl.isNotEmpty)
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -1012,6 +979,177 @@ class _WebSearchShimmerState extends State<_WebSearchShimmer>
         );
       },
     );
+  }
+}
+
+class _ImageGenerationShimmer extends StatefulWidget {
+  @override
+  _ImageGenerationShimmerState createState() => _ImageGenerationShimmerState();
+}
+
+class _ImageGenerationShimmerState extends State<_ImageGenerationShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+    
+    _pulseAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Container(
+          width: 280,
+          height: 280,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                theme.colorScheme.surfaceVariant.withOpacity(0.5),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Shimmer effect overlay
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CustomPaint(
+                    painter: _ShimmerPainter(
+                      shimmerPosition: _shimmerAnimation.value,
+                      baseColor: theme.colorScheme.surfaceVariant,
+                      shimmerColor: theme.colorScheme.primary.withOpacity(0.1),
+                    ),
+                  ),
+                ),
+              ),
+              // Center content
+              Center(
+                child: Transform.scale(
+                  scale: _pulseAnimation.value,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                        ),
+                        child: Icon(
+                          Icons.auto_awesome,
+                          size: 32,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Creating Image',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Progress dots
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(3, (index) {
+                          final delay = index * 0.2;
+                          final opacity = (((_shimmerAnimation.value - delay) % 1.0) * 2)
+                              .clamp(0.3, 1.0);
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: theme.colorScheme.primary.withOpacity(opacity),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShimmerPainter extends CustomPainter {
+  final double shimmerPosition;
+  final Color baseColor;
+  final Color shimmerColor;
+
+  _ShimmerPainter({
+    required this.shimmerPosition,
+    required this.baseColor,
+    required this.shimmerColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment(-1.0 + shimmerPosition * 2, -1.0 + shimmerPosition * 2),
+        end: Alignment(-0.5 + shimmerPosition * 2, -0.5 + shimmerPosition * 2),
+        colors: [
+          baseColor,
+          shimmerColor,
+          shimmerColor,
+          baseColor,
+        ],
+        stops: const [0.0, 0.45, 0.55, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(_ShimmerPainter oldDelegate) {
+    return oldDelegate.shimmerPosition != shimmerPosition;
   }
 }
 
