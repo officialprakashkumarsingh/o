@@ -14,6 +14,7 @@ import '../../../shared/widgets/prompt_enhancer.dart';
 class ChatInput extends StatefulWidget {
   final TextEditingController? controller;
   final Function(String, {bool useWebSearch}) onSendMessage;
+  final Function(List<String>, String)? onFileUpload; // New callback for file uploads
   final Function(String)? onGenerateImage;
   final Function(String)? onGenerateDiagram;
   final Function(String)? onGeneratePresentation;
@@ -31,6 +32,7 @@ class ChatInput extends StatefulWidget {
     super.key,
     this.controller,
     required this.onSendMessage,
+    this.onFileUpload,
     this.onGenerateImage,
     this.onGenerateDiagram,
     this.onGeneratePresentation,
@@ -147,14 +149,10 @@ class _ChatInputState extends State<ChatInput> {
     _controller.clear();
     _updateSendButton();
     
-    // If there's hidden file content, use that instead of the display text
-    if (_hiddenFileContent.isNotEmpty) {
-      // Create a display message for UI
-      final displayMessage = '📎 Files: ${_uploadedFileNames.join(', ')}';
-      
-      // Send both - display for UI, hidden content for AI processing
-      // We'll need to modify the message handling to support this
-      widget.onSendMessage(_hiddenFileContent, useWebSearch: _webSearchEnabled);
+    // If there's hidden file content, use the file upload callback
+    if (_hiddenFileContent.isNotEmpty && widget.onFileUpload != null) {
+      // Use the file upload callback to send both file names and content
+      widget.onFileUpload!(_uploadedFileNames, _hiddenFileContent);
       
       // Clear hidden content after sending
       _hiddenFileContent = '';

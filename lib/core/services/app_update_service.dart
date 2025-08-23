@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class AppUpdateService {
   static const String updateJsonUrl = 
@@ -61,11 +62,24 @@ class AppUpdateService {
     Function(double) onProgress,
   ) async {
     try {
+      // Request install packages permission for Android
+      if (Platform.isAndroid) {
+        // Check if we can request install permission
+        final status = await Permission.requestInstallPackages.status;
+        if (!status.isGranted) {
+          // Request permission
+          final result = await Permission.requestInstallPackages.request();
+          if (!result.isGranted) {
+            throw Exception('Install permission denied. Please enable "Install unknown apps" in settings.');
+          }
+        }
+      }
+      
       final dio = Dio();
       
       // Get the downloads directory
       final dir = await getExternalStorageDirectory();
-      final fileName = 'ahamai_update.apk';
+      final fileName = 'ahamai_update_${DateTime.now().millisecondsSinceEpoch}.apk';
       final savePath = '${dir!.path}/$fileName';
       
       // Download the APK

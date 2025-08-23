@@ -21,6 +21,7 @@ import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
 import '../../../core/models/web_search_message_model.dart';
 import '../../../core/models/vision_analysis_message_model.dart';
+import '../../../core/models/file_upload_message_model.dart';
 import '../../../core/services/diagram_service.dart';
 import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
@@ -181,6 +182,7 @@ class _ChatPageState extends State<ChatPage> {
               controller: _inputController,
               selectedModel: modelService.selectedModel,
               onSendMessage: _handleSendMessage,
+              onFileUpload: _handleFileUpload,
               onGenerateImage: _handleImageGeneration,
               onGenerateDiagram: _handleDiagramGeneration,
               onGeneratePresentation: _handlePresentationGeneration,
@@ -456,6 +458,134 @@ class _ChatPageState extends State<ChatPage> {
         );
       },
     );
+  }
+
+  Future<void> _handleFileUpload(List<String> fileNames, String fileContent) async {
+    final modelService = ModelService.instance;
+    
+    // Determine which models to use
+    List<String> modelsToUse;
+    if (modelService.multipleModelsEnabled && modelService.selectedModels.isNotEmpty) {
+      modelsToUse = modelService.selectedModels;
+    } else {
+      modelsToUse = [modelService.selectedModel];
+    }
+    
+    if (fileContent.trim().isEmpty || modelsToUse.isEmpty || modelsToUse.first.isEmpty) return;
+
+    // Ensure we have a session before proceeding
+    if (ChatHistoryService.instance.currentSessionId == null) {
+      print('Creating new session for file upload');
+      await ChatHistoryService.instance.getOrCreateActiveSession();
+    }
+
+    // Create a file upload message for display
+    final fileUploadMessage = FileUploadMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      fileNames: fileNames,
+      actualContent: fileContent,
+      timestamp: DateTime.now(),
+    );
+    
+    setState(() {
+      _messages.add(fileUploadMessage);
+      _isLoading = true;
+    });
+
+    _scrollToBottom();
+    
+    // Track message for ads
+    await AdService.instance.onMessageSent();
+    
+    // Save user message to history
+    ChatHistoryService.instance.saveMessage(fileUploadMessage).catchError((e) {
+      print('Error saving file upload message: $e');
+    });
+
+    // Get conversation history
+    final allHistory = _messages
+        .where((m) => !m.isStreaming && !m.hasError)
+        .map((m) => m.toApiFormat())
+        .toList();
+    
+    // Limit to last 20 messages for memory efficiency
+    final history = allHistory.length > 20 
+        ? allHistory.sublist(allHistory.length - 20)
+        : allHistory;
+
+    // Remove the last user message from history to avoid duplication
+    if (history.isNotEmpty && history.last['role'] == 'user') {
+      history.removeLast();
+    }
+
+    try {
+      // Process with each selected model
+      for (int i = 0; i < modelsToUse.length; i++) {
+        final model = modelsToUse[i];
+        final aiMessage = Message.assistant('', modelName: model);
+        
+        setState(() {
+          _messages.add(aiMessage);
+        });
+        
+        final messageIndex = _messages.length - 1;
+        
+        // Create API service for this model
+        final apiService = ApiService(
+          model: model,
+          apiKey: '', // Will be set in the service
+        );
+        
+        // Get the stream
+        final stream = await apiService.sendMessage(
+          fileContent, // Send the actual file content
+          history: history,
+        );
+        
+        // Process the stream
+        String fullResponse = '';
+        await for (final chunk in stream) {
+          if (mounted) {
+            fullResponse += chunk;
+            setState(() {
+              _messages[messageIndex] = Message.assistant(
+                fullResponse,
+                modelName: model,
+              );
+            });
+            _scrollToBottom();
+          }
+        }
+        
+        // Save AI response to history
+        ChatHistoryService.instance.saveMessage(
+          _messages[messageIndex],
+          modelName: model,
+        ).catchError((e) {
+          print('Error saving AI response: $e');
+        });
+      }
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+    } catch (e) {
+      print('Error in file upload: $e');
+      setState(() {
+        _isLoading = false;
+        if (_messages.isNotEmpty && _messages.last.type == MessageType.assistant) {
+          final lastMessage = _messages.last;
+          _messages[_messages.length - 1] = Message(
+            id: lastMessage.id,
+            content: 'Sorry, I encountered an error while processing your files. Please try again.',
+            type: MessageType.assistant,
+            timestamp: lastMessage.timestamp,
+            hasError: true,
+          );
+        }
+      });
+    }
   }
 
   Future<void> _handleSendMessage(String content, {bool useWebSearch = false}) async {
