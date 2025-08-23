@@ -12,6 +12,7 @@ class ChatSession {
   final int messageCount;
   final String? lastUserMessage;
   final bool? isPinned;
+  List<Message>? messages; // Cache for messages
 
   ChatSession({
     required this.id,
@@ -22,6 +23,7 @@ class ChatSession {
     required this.messageCount,
     this.lastUserMessage,
     this.isPinned,
+    this.messages,
   });
 
   factory ChatSession.fromJson(Map<String, dynamic> json) {
@@ -236,10 +238,30 @@ class ChatHistoryService extends ChangeNotifier {
         );
       }).toList();
       
+      // Cache messages in the session
+      final sessionIndex = _sessions.indexWhere((s) => s.id == sessionId);
+      if (sessionIndex != -1) {
+        _sessions[sessionIndex].messages = messages;
+      }
+      
       return messages;
     } catch (e) {
       print('Error loading messages: $e');
       return [];
+    }
+  }
+  
+  // Load messages for all sessions (for searching)
+  Future<void> loadAllSessionMessages() async {
+    try {
+      for (var session in _sessions) {
+        if (session.messages == null) {
+          session.messages = await loadSessionMessages(session.id);
+        }
+      }
+      notifyListeners();
+    } catch (e) {
+      print('Error loading all messages: $e');
     }
   }
 

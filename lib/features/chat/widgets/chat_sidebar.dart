@@ -22,6 +22,7 @@ class _ChatSidebarState extends State<ChatSidebar> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isSearching = false;
+  bool _isLoadingMessages = false;
   
   @override
   void initState() {
@@ -43,6 +44,11 @@ class _ChatSidebarState extends State<ChatSidebar> {
     setState(() {
       _searchQuery = _searchController.text.toLowerCase();
     });
+    
+    // Load all messages for deep search if query is not empty
+    if (_searchQuery.isNotEmpty && !_isLoadingMessages) {
+      _loadAllMessages();
+    }
   }
   
   void _onHistoryChanged() {
@@ -51,6 +57,22 @@ class _ChatSidebarState extends State<ChatSidebar> {
   
   Future<void> _loadHistory() async {
     await _historyService.loadSessions();
+  }
+  
+  Future<void> _loadAllMessages() async {
+    if (_isLoadingMessages) return;
+    
+    setState(() {
+      _isLoadingMessages = true;
+    });
+    
+    await _historyService.loadAllSessionMessages();
+    
+    if (mounted) {
+      setState(() {
+        _isLoadingMessages = false;
+      });
+    }
   }
   
   String _formatDate(DateTime date) {
@@ -195,19 +217,30 @@ class _ChatSidebarState extends State<ChatSidebar> {
   
   void _showRenameDialog(BuildContext context, ChatSession session) {
     final controller = TextEditingController(text: session.title);
+    final theme = Theme.of(context);
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Rename Chat'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Enter new name',
-            border: OutlineInputBorder(),
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
           ),
-          maxLength: 50,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              hintText: 'Enter new name',
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              counterText: '',
+            ),
+            maxLength: 50,
+          ),
         ),
         actions: [
           TextButton(
@@ -240,7 +273,21 @@ class _ChatSidebarState extends State<ChatSidebar> {
     final sessions = _searchQuery.isEmpty
         ? allSessions
         : allSessions.where((session) {
-            return session.title.toLowerCase().contains(_searchQuery);
+            // Search in title
+            if (session.title.toLowerCase().contains(_searchQuery)) {
+              return true;
+            }
+            
+            // Search in message content if available
+            if (session.messages != null) {
+              for (var message in session.messages!) {
+                if (message.content.toLowerCase().contains(_searchQuery)) {
+                  return true;
+                }
+              }
+            }
+            
+            return false;
           }).toList();
     
     return Container(
@@ -392,22 +439,35 @@ class _ChatSidebarState extends State<ChatSidebar> {
                   child: Row(
                     children: [
                       const SizedBox(width: 12),
-                      Icon(
-                        _isSearching ? Icons.search : Icons.search,
-                        size: 18,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      ),
+                      _isLoadingMessages
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  theme.colorScheme.primary.withOpacity(0.6),
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.search,
+                              size: 18,
+                              color: theme.colorScheme.onSurface.withOpacity(0.5),
+                            ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
                           controller: _searchController,
                           style: theme.textTheme.bodyMedium,
                           decoration: InputDecoration(
-                            hintText: 'Search chats...',
+                            hintText: 'Search chats and messages...',
                             hintStyle: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurface.withOpacity(0.4),
                             ),
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(vertical: 10),
                           ),
