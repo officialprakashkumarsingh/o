@@ -42,6 +42,10 @@ class VisionService {
     required String model,
   }) async {
     try {
+      print('VisionService: Analyzing image with model: $model');
+      print('VisionService: Image data length: ${imageData.length} characters');
+      print('VisionService: Prompt: $prompt');
+      
       final messages = [
         {
           'role': 'user',
@@ -65,6 +69,7 @@ class VisionService {
         'messages': messages,
         'stream': true, // Enable streaming for vision API
         'temperature': 0.7,
+        'max_tokens': 2000,
       };
 
       final request = http.Request('POST', Uri.parse('$baseUrl/v1/chat/completions'));
@@ -131,15 +136,21 @@ class VisionService {
   // Get the best available vision model
   static Future<String?> getBestVisionModel() async {
     try {
+      // First try to get models from the vision endpoint
       final visionModels = await getVisionModels();
       if (visionModels.isNotEmpty) {
-        // Return the first available vision model
+        print('Vision models from /v1/vision/models: ${visionModels.map((m) => m.id).toList()}');
         return visionModels.first.id;
       }
+      
+      // Fallback to known vision models
+      print('No vision models from API, using fallback: llama-4-scout-17b-16e-instruct');
+      return 'llama-4-scout-17b-16e-instruct';
     } catch (e) {
       print('Error getting vision models: $e');
+      // Return a known working vision model as fallback
+      return 'llama-4-scout-17b-16e-instruct';
     }
-    return null;
   }
 
   // Check if a model supports vision
