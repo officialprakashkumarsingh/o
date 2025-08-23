@@ -19,17 +19,30 @@ class AppUpdateService {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
       
+      print('Current app version: $currentVersion');
+      print('Checking for updates at: $updateJsonUrl');
+      
       // Fetch update info from JSON
       final response = await http.get(Uri.parse(updateJsonUrl));
+      
+      print('Update check response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
         final updateInfo = UpdateInfo.fromJson(json);
         
+        print('Latest version available: ${updateInfo.latestVersion}');
+        print('Download URL: ${updateInfo.downloadUrl}');
+        
         // Compare versions
         if (_isNewerVersion(currentVersion, updateInfo.latestVersion)) {
+          print('Update available! ${currentVersion} -> ${updateInfo.latestVersion}');
           return updateInfo;
+        } else {
+          print('App is up to date');
         }
+      } else {
+        print('Failed to fetch update info: HTTP ${response.statusCode}');
       }
       
       return null;
@@ -94,6 +107,14 @@ class AppUpdateService {
       // Start with 0 progress
       onProgress(0.0);
       
+      // Test if URL is accessible first
+      try {
+        final testResponse = await dio.head(downloadUrl);
+        print('URL test response: ${testResponse.statusCode}');
+      } catch (e) {
+        print('Warning: Could not test URL accessibility: $e');
+      }
+      
       // Download the APK with better error handling
       final response = await dio.download(
         downloadUrl,
@@ -101,16 +122,22 @@ class AppUpdateService {
         onReceiveProgress: (received, total) {
           if (total != -1 && total > 0) {
             final progress = received / total;
-            print('Download progress: ${(progress * 100).toInt()}%');
+            print('Download progress: ${(progress * 100).toInt()}% ($received/$total bytes)');
             onProgress(progress);
           } else {
             // If total is unknown, show indeterminate progress
+            print('Download progress: $received bytes (total unknown)');
             onProgress(received > 0 ? 0.5 : 0.0);
           }
         },
         options: Options(
           receiveTimeout: const Duration(minutes: 10),
           sendTimeout: const Duration(seconds: 30),
+          followRedirects: true,
+          maxRedirects: 5,
+          headers: {
+            'User-Agent': 'AhamAI-App/1.0',
+          },
         ),
       );
       
