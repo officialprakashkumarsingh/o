@@ -522,7 +522,7 @@ class _ChatPageState extends State<ChatPage> {
       // Process with each selected model
       for (int i = 0; i < modelsToUse.length; i++) {
         final model = modelsToUse[i];
-        final aiMessage = Message.assistant('', modelName: model);
+        final aiMessage = Message.assistant('', isStreaming: true);
         
         setState(() {
           _messages.add(aiMessage);
@@ -530,15 +530,10 @@ class _ChatPageState extends State<ChatPage> {
         
         final messageIndex = _messages.length - 1;
         
-        // Create API service for this model
-        final apiService = ApiService(
-          model: model,
-          apiKey: '', // Will be set in the service
-        );
-        
-        // Get the stream
-        final stream = await apiService.sendMessage(
+        // Get the stream using static method
+        final stream = await ApiService.sendMessage(
           fileContent, // Send the actual file content
+          model: model,
           history: history,
         );
         
@@ -550,7 +545,7 @@ class _ChatPageState extends State<ChatPage> {
             setState(() {
               _messages[messageIndex] = Message.assistant(
                 fullResponse,
-                modelName: model,
+                isStreaming: false,
               );
             });
             _scrollToBottom();
@@ -560,7 +555,6 @@ class _ChatPageState extends State<ChatPage> {
         // Save AI response to history
         ChatHistoryService.instance.saveMessage(
           _messages[messageIndex],
-          modelName: model,
         ).catchError((e) {
           print('Error saving AI response: $e');
         });

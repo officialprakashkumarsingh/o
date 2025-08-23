@@ -110,7 +110,10 @@ class AppUpdateService {
     showDialog(
       context: context,
       barrierDismissible: !updateInfo.isForceUpdate,
-      builder: (context) => UpdateDialog(updateInfo: updateInfo),
+      builder: (context) => WillPopScope(
+        onWillPop: () async => !updateInfo.isForceUpdate,
+        child: UpdateDialog(updateInfo: updateInfo),
+      ),
     );
   }
 }

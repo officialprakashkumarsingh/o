@@ -24,6 +24,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _isForceUpdateRequired = false;
 
   @override
   void initState() {
@@ -59,6 +60,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     try {
       final updateInfo = await AppUpdateService.checkForUpdate();
       if (updateInfo != null && mounted) {
+        if (updateInfo.isForceUpdate) {
+          setState(() {
+            _isForceUpdateRequired = true;
+          });
+        }
         AppUpdateService.showUpdateDialog(context, updateInfo);
       }
     } catch (e) {
@@ -76,6 +82,39 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = AuthService.instance.currentUser;
+    
+    // If force update is required, show a blocking screen
+    if (_isForceUpdateRequired) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.system_update,
+                  size: 64,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Update Required',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please update the app to continue',
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     
     return Scaffold(
       key: _scaffoldKey,

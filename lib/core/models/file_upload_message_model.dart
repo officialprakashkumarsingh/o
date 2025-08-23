@@ -20,7 +20,7 @@ class FileUploadMessage extends Message {
   String get aiContent => actualContent;
   
   @override
-  Map<String, dynamic> toApiFormat() {
+  Map<String, String> toApiFormat() {
     return {
       'role': 'user',
       'content': actualContent, // Send actual content to AI
