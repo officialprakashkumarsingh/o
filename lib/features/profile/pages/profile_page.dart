@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../settings/pages/theme_selector_page.dart';
 import '../../settings/widgets/message_mode_selector.dart';
@@ -8,6 +9,7 @@ import '../../chat/widgets/model_selector_sheet.dart';
 import '../../../core/services/model_service.dart';
 import '../../../core/services/image_service.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/services/ad_service.dart';
 import '../../../shared/widgets/smooth_app_bar.dart';
 import '../../auth/pages/login_page.dart';
@@ -389,7 +391,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Version 1.0.0',
+                    'Check for updates',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.5),
                     ),
@@ -1169,8 +1171,85 @@ class _ImageModelSelectorSheet extends StatelessWidget {
   }
 }
 
-class _AboutBottomSheet extends StatelessWidget {
+class _AboutBottomSheet extends StatefulWidget {
   const _AboutBottomSheet();
+  
+  @override
+  State<_AboutBottomSheet> createState() => _AboutBottomSheetState();
+}
+
+class _AboutBottomSheetState extends State<_AboutBottomSheet> {
+  String _currentVersion = '1.0.0';
+  bool _isCheckingUpdate = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadVersionInfo();
+  }
+  
+  Future<void> _loadVersionInfo() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _currentVersion = packageInfo.version;
+        });
+      }
+    } catch (e) {
+      print('Error loading version info: $e');
+    }
+  }
+  
+  Future<void> _checkForUpdate() async {
+    setState(() {
+      _isCheckingUpdate = true;
+    });
+    
+    try {
+      final updateInfo = await AppUpdateService.checkForUpdate();
+      
+      if (!mounted) return;
+      
+      setState(() {
+        _isCheckingUpdate = false;
+      });
+      
+      if (updateInfo != null) {
+        Navigator.pop(context); // Close the about sheet
+        AppUpdateService.showUpdateDialog(context, updateInfo);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('You have the latest version!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCheckingUpdate = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check for updates: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _launchEmail() async {
     final Uri emailUri = Uri(
@@ -1284,9 +1363,44 @@ class _AboutBottomSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Version 1.0.0',
+                        'Version $_currentVersion',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Check for Update button
+                      TextButton.icon(
+                        onPressed: _isCheckingUpdate ? null : _checkForUpdate,
+                        icon: _isCheckingUpdate
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    theme.colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                            : Icon(
+                                Icons.system_update,
+                                size: 18,
+                                color: theme.colorScheme.primary,
+                              ),
+                        label: Text(
+                          _isCheckingUpdate ? 'Checking...' : 'Check for Updates',
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
                         ),
                       ),
                     ],

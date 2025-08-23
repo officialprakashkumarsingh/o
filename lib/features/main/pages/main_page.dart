@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../theme/providers/theme_provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/services/chat_history_service.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../chat/pages/new_chat_page.dart';
 import '../../chat/widgets/model_selector_sheet.dart';
@@ -44,6 +45,25 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     
     // Initialize chat history
     ChatHistoryService.instance.initialize();
+    
+    // Check for app updates
+    _checkForAppUpdate();
+  }
+  
+  Future<void> _checkForAppUpdate() async {
+    // Wait a bit before checking for updates to let the UI settle
+    await Future.delayed(const Duration(seconds: 2));
+    
+    if (!mounted) return;
+    
+    try {
+      final updateInfo = await AppUpdateService.checkForUpdate();
+      if (updateInfo != null && mounted) {
+        AppUpdateService.showUpdateDialog(context, updateInfo);
+      }
+    } catch (e) {
+      print('Error checking for app update: $e');
+    }
   }
 
   @override
