@@ -13,7 +13,7 @@ import '../../../shared/widgets/prompt_enhancer.dart';
 
 class ChatInput extends StatefulWidget {
   final TextEditingController? controller;
-  final Function(String, {bool useWebSearch}) onSendMessage;
+  final Function(String) onSendMessage;
   final Function(List<String>, String)? onFileUpload; // New callback for file uploads
   final Function(String)? onGenerateImage;
   final Function(String)? onGenerateDiagram;
@@ -57,7 +57,7 @@ class _ChatInputState extends State<ChatInput> {
   bool _canSend = false;
   bool _shouldDisposeController = false;
   bool _showEnhancerSuggestion = false;
-  bool _webSearchEnabled = false;
+
   bool _imageGenerationMode = false;
   bool _diagramGenerationMode = false;
   bool _presentationGenerationMode = false;
@@ -162,7 +162,7 @@ class _ChatInputState extends State<ChatInput> {
       widget.onVisionAnalysis!(message, _pendingImageData!);
       _pendingImageData = null; // Clear after use
     } else {
-      widget.onSendMessage(message, useWebSearch: _webSearchEnabled);
+      widget.onSendMessage(message);
     }
     
     HapticFeedback.lightImpact();
@@ -412,7 +412,7 @@ class _ChatInputState extends State<ChatInput> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _ExtensionsBottomSheet(
-        webSearchEnabled: _webSearchEnabled,
+
         imageGenerationMode: _imageGenerationMode,
         diagramGenerationMode: _diagramGenerationMode,
         presentationGenerationMode: _presentationGenerationMode,
@@ -434,7 +434,7 @@ class _ChatInputState extends State<ChatInput> {
             await AdService.instance.onExtensionFeatureUsed();
           }
           setState(() {
-            _webSearchEnabled = enabled;
+
             if (enabled) {
               _imageGenerationMode = false;
               _diagramGenerationMode = false;
@@ -450,7 +450,6 @@ class _ChatInputState extends State<ChatInput> {
           setState(() {
             _imageGenerationMode = enabled;
             if (enabled) {
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -470,7 +469,6 @@ class _ChatInputState extends State<ChatInput> {
             _diagramGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -484,7 +482,6 @@ class _ChatInputState extends State<ChatInput> {
             _presentationGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _chartGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -498,7 +495,6 @@ class _ChatInputState extends State<ChatInput> {
             _chartGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -512,7 +508,6 @@ class _ChatInputState extends State<ChatInput> {
             _flashcardGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -526,7 +521,6 @@ class _ChatInputState extends State<ChatInput> {
             _quizGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -712,8 +706,7 @@ class _ChatInputState extends State<ChatInput> {
            _presentationGenerationMode || 
            _chartGenerationMode || 
            _flashcardGenerationMode || 
-           _quizGenerationMode ||
-           _webSearchEnabled;
+           _quizGenerationMode;
   }
   
   void _clearAllExtensions() {
@@ -724,7 +717,6 @@ class _ChatInputState extends State<ChatInput> {
       _chartGenerationMode = false;
       _flashcardGenerationMode = false;
       _quizGenerationMode = false;
-      _webSearchEnabled = false;
     });
     _updateSendButton();
   }
@@ -766,7 +758,6 @@ class _ChatInputState extends State<ChatInput> {
 }
 
 class _ExtensionsBottomSheet extends StatelessWidget {
-  final bool webSearchEnabled;
   final bool imageGenerationMode;
   final bool diagramGenerationMode;
   final bool presentationGenerationMode;
@@ -785,7 +776,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
   final VoidCallback onEnhancePrompt;
 
   const _ExtensionsBottomSheet({
-    required this.webSearchEnabled,
+
     required this.imageGenerationMode,
     this.diagramGenerationMode = false,
     this.presentationGenerationMode = false,
@@ -861,19 +852,9 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                 
                 const SizedBox(height: 12),
                 
-                // Second row - Search, Enhance, and Image generation
+                // Second row - Enhance and Image generation
                 Row(
                   children: [
-                    Expanded(
-                      child: _ExtensionTile(
-                        icon: Icons.search_outlined,
-                        title: 'Web Search',
-                        subtitle: '',
-                        isToggled: webSearchEnabled,
-                        onTap: () => onWebSearchToggle(!webSearchEnabled),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: _CompactExtensionTile(
                         icon: Icons.auto_fix_high,

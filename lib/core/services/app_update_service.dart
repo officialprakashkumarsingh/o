@@ -8,9 +8,10 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppUpdateService {
-  static const String updateJsonUrl = 
+  static final String updateJsonUrl = dotenv.env['APP_UPDATE_JSON_URL'] ?? 
       'https://raw.githubusercontent.com/officialprakashkumarsingh/ahamai-landingpage/main/app-update.json';
   
   static Future<UpdateInfo?> checkForUpdate() async {

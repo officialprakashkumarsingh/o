@@ -9,7 +9,7 @@ import '../../../core/services/template_service.dart';
 import '../../../core/services/message_mode_service.dart';
 import '../../../core/services/model_service.dart';
 import '../../../core/services/image_service.dart';
-import '../../../core/services/web_search_service.dart';
+
 import '../../../core/services/export_service.dart';
 import '../../../core/services/vision_service.dart';
 import '../../../core/models/image_message_model.dart';
@@ -19,7 +19,7 @@ import '../../../core/models/presentation_message_model.dart';
 import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
-import '../../../core/models/web_search_message_model.dart';
+
 import '../../../core/models/vision_analysis_message_model.dart';
 import '../../../core/models/file_upload_message_model.dart';
 import '../../../core/services/diagram_service.dart';
@@ -582,7 +582,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _handleSendMessage(String content, {bool useWebSearch = false}) async {
+  Future<void> _handleSendMessage(String content) async {
     final modelService = ModelService.instance;
     
     // Determine which models to use
@@ -635,37 +635,7 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     try {
-      // Handle web search if enabled
       String enhancedContent = content.trim();
-      if (useWebSearch) {
-        // Show searching indicator with shimmer
-        final searchingMessage = WebSearchMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + '_search',
-          isSearching: true,
-        );
-        setState(() {
-          _messages.add(searchingMessage);
-        });
-        
-        // Perform web search
-        final searchResults = await WebSearchService.search(query: content.trim());
-        final searchData = WebSearchService.formatSearchResults(searchResults);
-        final currentDateTime = WebSearchService.getCurrentDateTime();
-        
-        // Update content with search results and current time
-        enhancedContent = '''$currentDateTime
-
-Web Search Results for: "$content"
-
-$searchData
-
-Based on the above current information and search results, please provide a comprehensive response to: "$content"''';
-        
-        // Remove searching indicator
-        setState(() {
-          _messages.removeLast();
-        });
-      }
       
       // Handle multiple models or single model
       for (int i = 0; i < modelsToUse.length; i++) {
