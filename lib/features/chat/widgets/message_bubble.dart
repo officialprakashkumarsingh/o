@@ -15,7 +15,9 @@ import '../../../core/models/presentation_message_model.dart';
 import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
+import '../../../core/models/vision_analysis_message_model.dart';
 import '../../../shared/widgets/markdown_message.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../shared/widgets/thinking_animation.dart';
 import '../../../shared/widgets/diagram_preview.dart';
 import '../../../shared/widgets/presentation_preview.dart';
@@ -109,40 +111,59 @@ class _MessageBubbleState extends State<MessageBubble>
       final aiModel = widget.aiModel ?? 'AI Assistant';
       final timestamp = widget.message.timestamp;
       
-      // Create a custom widget for export with all context
-      final exportWidget = await showDialog<Widget>(
+      // Create a GlobalKey for the export widget
+      final exportKey = GlobalKey();
+      
+            // Create a custom widget for export with all context
+      final dialogContext = await showDialog<BuildContext?>(
         context: context,
         barrierColor: Colors.transparent,
-        builder: (context) => Stack(
-          children: [
-            Positioned(
-              left: -1000,
-              child: Material(
-                child: Container(
-                  width: 800,
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  child: RepaintBoundary(
-                    key: GlobalKey(),
-                    child: _ExportMessageWidget(
-                      userMessage: userMessage,
-                      aiMessage: widget.message,
-                      aiModel: aiModel,
-                      timestamp: timestamp,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          // Schedule the capture and close after render
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await Future.delayed(const Duration(milliseconds: 200));
+            if (dialogContext.mounted) {
+              Navigator.of(dialogContext).pop(dialogContext);
+            }
+          });
+          
+          return Stack(
+            children: [
+              Positioned(
+                left: -2000,
+                top: 0,
+                child: Material(
+                  child: Container(
+                    width: 1200, // Increased width for better quality
+                    color: Theme.of(context).scaffoldBackgroundColor,
+                    child: RepaintBoundary(
+                      key: exportKey,
+                      child: _ExportMessageWidget(
+                        userMessage: userMessage,
+                        aiMessage: widget.message,
+                        aiModel: aiModel,
+                        timestamp: timestamp,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       );
-
-      // Wait for the widget to render
+      
+      if (dialogContext == null) {
+        throw Exception('Dialog context is null');
+      }
+      
+      // Wait a bit more to ensure rendering is complete
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Find and capture the export widget
       final RenderRepaintBoundary? boundary = 
-          (exportWidget as RepaintBoundary?)?.key?.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+          exportKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       
       if (boundary == null) {
         // Fallback to original message capture
@@ -279,6 +300,8 @@ class _MessageBubbleState extends State<MessageBubble>
                   _buildFlashcardContent(widget.message as FlashcardMessage),
                 ] else if (widget.message is QuizMessage) ...[
                   _buildQuizContent(widget.message as QuizMessage),
+                ] else if (widget.message is VisionAnalysisMessage) ...[
+                  _buildVisionAnalysisContent(widget.message as VisionAnalysisMessage),
                 ] else ...[
                   // Regular message content with markdown support
                   MarkdownMessage(
@@ -289,17 +312,19 @@ class _MessageBubbleState extends State<MessageBubble>
                 ],
                 
                 // Streaming indicator - only show if no content yet
-                // Don't show for DiagramMessage, PresentationMessage, or ChartMessage
+                // Don't show for special message types that have their own animations
                 if (isStreaming && 
                     widget.message.content.isEmpty &&
                     widget.message is! DiagramMessage &&
                     widget.message is! PresentationMessage &&
                     widget.message is! ChartMessage &&
                     widget.message is! FlashcardMessage &&
-                    widget.message is! QuizMessage) ...[
+                    widget.message is! QuizMessage &&
+                    widget.message is! VisionAnalysisMessage) ...[
                   const SizedBox(height: 8),
-                  ThinkingIndicator(
+                  ThinkingAnimation(
                     color: Theme.of(context).colorScheme.primary,
+                    size: 8,
                   ),
                 ],
               ],
@@ -417,42 +442,9 @@ class _MessageBubbleState extends State<MessageBubble>
         
         const SizedBox(height: 12),
         
-        // Image or loading state
+                // Image or loading state
         if (imageMessage.isGenerating)
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Generating...',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          )
+          _ImageGenerationShimmer()
         else if (imageMessage.imageUrl.isNotEmpty)
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -473,6 +465,7 @@ class _MessageBubbleState extends State<MessageBubble>
           width: 280,
           height: 280,
           fit: BoxFit.cover,
+          gaplessPlayback: true, // Prevent blinking
           errorBuilder: (context, error, stackTrace) {
             return _buildImageError();
           },
@@ -482,12 +475,15 @@ class _MessageBubbleState extends State<MessageBubble>
       }
     }
     
-    // Handle regular network URLs
+    // Handle regular network URLs with caching
     return Image.network(
       imageUrl,
       width: 200,
       height: 200,
       fit: BoxFit.cover,
+      gaplessPlayback: true, // Prevent blinking during rebuild
+      cacheWidth: 400, // Cache at reasonable resolution
+      cacheHeight: 400,
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return Container(
@@ -841,6 +837,373 @@ class _MessageBubbleState extends State<MessageBubble>
       );
     }
   }
+
+
+
+  Widget _buildVisionAnalysisContent(VisionAnalysisMessage message) {
+    if (message.isAnalyzing) {
+      return _VisionAnalysisShimmer();
+    } else {
+      return MarkdownMessage(
+        content: message.content,
+        isUser: false,
+      );
+    }
+  }
+}
+
+
+
+class _ImageGenerationShimmer extends StatefulWidget {
+  @override
+  _ImageGenerationShimmerState createState() => _ImageGenerationShimmerState();
+}
+
+class _ImageGenerationShimmerState extends State<_ImageGenerationShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+    
+    _pulseAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Container(
+          width: 280,
+          height: 280,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                theme.colorScheme.surfaceVariant.withOpacity(0.5),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Shimmer effect overlay
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CustomPaint(
+                    painter: _ShimmerPainter(
+                      shimmerPosition: _shimmerAnimation.value,
+                      baseColor: theme.colorScheme.surfaceVariant,
+                      shimmerColor: theme.colorScheme.primary.withOpacity(0.1),
+                    ),
+                  ),
+                ),
+              ),
+              // Center content
+              Center(
+                child: Transform.scale(
+                  scale: _pulseAnimation.value,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                        ),
+                        child: Icon(
+                          Icons.auto_awesome,
+                          size: 32,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Creating Image',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Progress dots
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(3, (index) {
+                          final delay = index * 0.2;
+                          final opacity = (((_shimmerAnimation.value - delay) % 1.0) * 2)
+                              .clamp(0.3, 1.0);
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: theme.colorScheme.primary.withOpacity(opacity),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShimmerPainter extends CustomPainter {
+  final double shimmerPosition;
+  final Color baseColor;
+  final Color shimmerColor;
+
+  _ShimmerPainter({
+    required this.shimmerPosition,
+    required this.baseColor,
+    required this.shimmerColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment(-1.0 + shimmerPosition * 2, -1.0 + shimmerPosition * 2),
+        end: Alignment(-0.5 + shimmerPosition * 2, -0.5 + shimmerPosition * 2),
+        colors: [
+          baseColor,
+          shimmerColor,
+          shimmerColor,
+          baseColor,
+        ],
+        stops: const [0.0, 0.45, 0.55, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(_ShimmerPainter oldDelegate) {
+    return oldDelegate.shimmerPosition != shimmerPosition;
+  }
+}
+
+class _VisionAnalysisShimmer extends StatefulWidget {
+  @override
+  _VisionAnalysisShimmerState createState() => _VisionAnalysisShimmerState();
+}
+
+class _VisionAnalysisShimmerState extends State<_VisionAnalysisShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -2.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Static eye icon
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    Icons.remove_red_eye_outlined,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                        theme.colorScheme.primary.withOpacity(0.9),
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                      ],
+                      stops: [
+                        0.0,
+                        0.5,
+                        1.0,
+                      ],
+                      transform: GradientRotation(_shimmerAnimation.value),
+                    ).createShader(bounds);
+                  },
+                  child: Text(
+                    'Analyzing image...',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Progress indicators
+            Row(
+              children: [
+                _buildProgressStep(theme, 'Scanning', 0),
+                const SizedBox(width: 8),
+                _buildProgressStep(theme, 'Processing', 1),
+                const SizedBox(width: 8),
+                _buildProgressStep(theme, 'Understanding', 2),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Shimmer bars representing analysis progress
+            ...List.generate(4, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  height: 14,
+                  width: 180 + (index * 25),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(7),
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.primary.withOpacity(0.15),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      ],
+                      stops: [
+                        0.0,
+                        _shimmerAnimation.value - 0.3,
+                        _shimmerAnimation.value,
+                        _shimmerAnimation.value + 0.3,
+                        1.0,
+                      ].map((stop) => stop.clamp(0.0, 1.0)).toList(),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressStep(ThemeData theme, String label, int index) {
+    final progress = ((_shimmerAnimation.value + 2) / 4).clamp(0.0, 1.0);
+    final isActive = progress > (index * 0.33);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: isActive 
+            ? theme.colorScheme.primary.withOpacity(0.1)
+            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        border: Border.all(
+          color: isActive
+              ? theme.colorScheme.primary.withOpacity(0.3)
+              : theme.colorScheme.outline.withOpacity(0.1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.4),
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ActionButton extends StatelessWidget {
@@ -912,147 +1275,168 @@ class _ExportMessageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = '${timestamp.day}/${timestamp.month}/${timestamp.year} ${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    final timeFormat = '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    final dateFormat = '${timestamp.day}/${timestamp.month}/${timestamp.year}';
     
     return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
+      padding: const EdgeInsets.all(20),
+      color: theme.scaffoldBackgroundColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with app name and timestamp
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Header with AhamAI branding
+          Center(
+            child: Column(
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: theme.colorScheme.primary,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'AhamAI',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                // AhamAI logo with proper font
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'अहम्',
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onBackground,
+                        ),
                       ),
-                    ),
-                  ],
+                      TextSpan(
+                        text: 'AI',
+                        style: GoogleFonts.inter(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      aiModel,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Text(
-                      dateFormat,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  dateFormat,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onBackground.withOpacity(0.5),
+                  ),
                 ),
               ],
             ),
           ),
           
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           
           // User message
           if (userMessage.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person_outline,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.person_outline,
-                        size: 18,
-                        color: theme.colorScheme.onPrimaryContainer,
+                      Row(
+                        children: [
+                          Text(
+                            'You',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onBackground.withOpacity(0.7),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            timeFormat,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: theme.colorScheme.onBackground.withOpacity(0.4),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 4),
                       Text(
-                        'You',
+                        userMessage,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onPrimaryContainer,
+                          color: theme.colorScheme.onBackground,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    userMessage,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          
-          // AI response
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      size: 18,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      aiModel,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                MarkdownMessage(
-                  content: aiMessage.content,
-                  isUser: false,
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+          ],
+          
+          // AI response
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    'AI',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Assistant',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onBackground.withOpacity(0.7),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          timeFormat,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 11,
+                            color: theme.colorScheme.onBackground.withOpacity(0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    MarkdownMessage(
+                      content: aiMessage.content,
+                      isUser: false,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

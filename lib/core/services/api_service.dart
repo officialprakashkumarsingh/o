@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://ahamai-api.officialprakashkrsingh.workers.dev';
-  static const String authToken = 'ahamaibyprakash25';
+  static final String baseUrl = dotenv.env['AHAMAI_API_URL'] ?? 'https://ahamai-api.officialprakashkrsingh.workers.dev';
+  static final String authToken = dotenv.env['AHAMAI_API_KEY'] ?? 'ahamaibyprakash25';
   
   static final Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -80,7 +81,6 @@ class ApiService {
         'model': model,
         'messages': messages,
         'stream': true,
-        'max_tokens': 4000,
         'temperature': 0.7,
       };
 

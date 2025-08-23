@@ -6,6 +6,7 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/services/diagram_service.dart';
 import 'diagram_preview.dart';
 
@@ -40,13 +41,53 @@ class MarkdownMessage extends StatelessWidget {
     }
 
     // AI messages: full markdown support with custom code blocks
+    // First, let's process code blocks manually
+    String processedContent = content;
+    final codeBlockRegex = RegExp(r'```(\w*)\n([\s\S]*?)```', multiLine: true);
+    final codeBlocks = <String, Widget>{};
+    int blockIndex = 0;
+    
+    // Replace code blocks with placeholders and store widgets
+    processedContent = processedContent.replaceAllMapped(codeBlockRegex, (match) {
+      final language = match.group(1) ?? '';
+      final code = match.group(2) ?? '';
+      final placeholder = '___CODEBLOCK_${blockIndex}___';
+      
+      codeBlocks[placeholder] = Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: _CodeBlockWidget(
+          code: code.trim(),
+          language: language,
+        ),
+      );
+      
+      blockIndex++;
+      return placeholder;
+    });
+    
+    // If we have code blocks, build a custom widget
+    if (codeBlocks.isNotEmpty) {
+      return _buildContentWithCodeBlocks(context, processedContent, codeBlocks);
+    }
+    
+    // Otherwise, use standard markdown rendering
+    final codeBlockBuilder = CodeBlockBuilder(context);
+    
     return MarkdownBody(
       data: content,
       selectable: true,
       styleSheet: _buildMarkdownStyleSheet(context),
       builders: {
-        'code': CodeBlockBuilder(),
+        'pre': codeBlockBuilder,
+        'code': codeBlockBuilder,
       },
+      extensionSet: md.ExtensionSet(
+        md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+        [
+          md.EmojiSyntax(),
+          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+        ],
+      ),
       onTapLink: (text, href, title) {
         // Handle link taps if needed
       },
@@ -57,6 +98,54 @@ class MarkdownMessage extends StatelessWidget {
     return text.contains('```mermaid') || 
            text.contains('```Mermaid') || 
            text.contains('```MERMAID');
+  }
+  
+  Widget _buildContentWithCodeBlocks(BuildContext context, String content, Map<String, Widget> codeBlocks) {
+    final parts = <Widget>[];
+    final lines = content.split('\n');
+    String currentText = '';
+    
+    for (final line in lines) {
+      // Check if this line is a code block placeholder
+      if (line.startsWith('___CODEBLOCK_') && line.endsWith('___')) {
+        // Add any accumulated text as markdown
+        if (currentText.isNotEmpty) {
+          parts.add(
+            MarkdownBody(
+              data: currentText,
+              selectable: true,
+              styleSheet: _buildMarkdownStyleSheet(context),
+            ),
+          );
+          currentText = '';
+        }
+        
+        // Add the code block widget
+        final widget = codeBlocks[line];
+        if (widget != null) {
+          parts.add(widget);
+        }
+      } else {
+        // Accumulate regular text
+        currentText += '$line\n';
+      }
+    }
+    
+    // Add any remaining text
+    if (currentText.isNotEmpty) {
+      parts.add(
+        MarkdownBody(
+          data: currentText,
+          selectable: true,
+          styleSheet: _buildMarkdownStyleSheet(context),
+        ),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: parts,
+    );
   }
 
   Widget _buildContentWithDiagram(BuildContext context) {
@@ -70,11 +159,23 @@ class MarkdownMessage extends StatelessWidget {
       if (match.start > lastEnd) {
         final textBefore = content.substring(lastEnd, match.start);
         if (textBefore.trim().isNotEmpty) {
+          final codeBlockBuilder = CodeBlockBuilder(context);
           parts.add(
             MarkdownBody(
               data: textBefore,
               selectable: true,
               styleSheet: _buildMarkdownStyleSheet(context),
+              builders: {
+                'pre': codeBlockBuilder,
+                'code': codeBlockBuilder,
+              },
+              extensionSet: md.ExtensionSet(
+                md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                [
+                  md.EmojiSyntax(),
+                  ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                ],
+              ),
             ),
           );
         }
@@ -100,11 +201,23 @@ class MarkdownMessage extends StatelessWidget {
     if (lastEnd < content.length) {
       final textAfter = content.substring(lastEnd);
       if (textAfter.trim().isNotEmpty) {
+        final codeBlockBuilder = CodeBlockBuilder(context);
         parts.add(
           MarkdownBody(
             data: textAfter,
             selectable: true,
             styleSheet: _buildMarkdownStyleSheet(context),
+            builders: {
+              'pre': codeBlockBuilder,
+              'code': codeBlockBuilder,
+            },
+            extensionSet: md.ExtensionSet(
+              md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+              [
+                md.EmojiSyntax(),
+                ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+              ],
+            ),
           ),
         );
       }
@@ -153,18 +266,11 @@ class MarkdownMessage extends StatelessWidget {
       
       // Code styles
       code: GoogleFonts.jetBrainsMono(
-        backgroundColor: theme.colorScheme.surfaceVariant.withOpacity(0.5),
+        backgroundColor: Colors.transparent, // Remove background for inline code
         color: textColor,
         fontSize: 13,
       ),
-      codeblockDecoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.2),
-          width: 1,
-        ),
-      ),
+      codeblockDecoration: const BoxDecoration(), // Empty decoration - handled by custom builder
       
       // List styles
       listBullet: theme.textTheme.bodyMedium?.copyWith(
@@ -216,33 +322,69 @@ class MarkdownMessage extends StatelessWidget {
 }
 
 class CodeBlockBuilder extends MarkdownElementBuilder {
+  final BuildContext context;
+  
+  CodeBlockBuilder(this.context);
+  
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    // Handle pre blocks (code blocks)
     if (element.tag == 'pre') {
-      final code = element.textContent;
-      final language = _extractLanguage(element);
+      String code = element.textContent;
+      String language = '';
       
-      return _CodeBlockWidget(
-        code: code,
-        language: language,
-      );
-    } else if (element.tag == 'code' && element.children?.isEmpty == true) {
-      // Inline code
+      // Try to extract language from code element inside pre
+      for (final node in element.children ?? []) {
+        if (node is md.Element && node.tag == 'code') {
+          code = node.textContent;
+          final className = node.attributes['class'] ?? '';
+          if (className.startsWith('language-')) {
+            language = className.substring('language-'.length);
+          }
+          break;
+        }
+      }
+      
+      // Return the custom code block widget
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: _CodeBlockWidget(
+          code: code.trim(),
+          language: language,
+        ),
+      );
+    }
+    
+    // Handle inline code
+    if (element.tag == 'code') {
+      // Skip if this has a language class (it's part of a code block)
+      final className = element.attributes['class'] ?? '';
+      if (className.startsWith('language-')) {
+        return null; // This will be handled by the pre block
+      }
+      
+      // This is inline code
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: Theme.of(element.context!).colorScheme.surfaceVariant.withOpacity(0.5),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey[800]
+              : Colors.grey[200],
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           element.textContent,
           style: GoogleFonts.jetBrainsMono(
             fontSize: 13,
-            color: Theme.of(element.context!).colorScheme.onSurface,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : Colors.black87,
           ),
         ),
       );
     }
+    
     return null;
   }
   
@@ -250,6 +392,11 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
     final className = element.attributes['class'] ?? '';
     if (className.startsWith('language-')) {
       return className.substring('language-'.length);
+    }
+    // Also check for common language indicators
+    final text = element.textContent.toLowerCase();
+    if (text.contains('<!doctype html') || text.contains('<html')) {
+      return 'html';
     }
     return '';
   }
@@ -270,6 +417,29 @@ class _CodeBlockWidget extends StatefulWidget {
 
 class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
   bool _copied = false;
+  bool _showPreview = false;
+  WebViewController? _webViewController;
+  
+  @override
+  void initState() {
+    super.initState();
+    if (_isHtmlCode()) {
+      _initWebView();
+    }
+  }
+  
+  bool _isHtmlCode() {
+    return widget.language.toLowerCase() == 'html' || 
+           widget.code.trim().toLowerCase().startsWith('<!doctype html') ||
+           widget.code.trim().toLowerCase().startsWith('<html');
+  }
+  
+  void _initWebView() {
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.white)
+      ..loadHtmlString(widget.code);
+  }
   
   void _copyToClipboard() {
     Clipboard.setData(ClipboardData(text: widget.code));
@@ -295,13 +465,21 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
     );
   }
   
+  void _togglePreview() {
+    setState(() {
+      _showPreview = !_showPreview;
+      if (_showPreview && _webViewController == null) {
+        _initWebView();
+      }
+    });
+  }
+  
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : const Color(0xFF282C34),
         borderRadius: BorderRadius.circular(8),
@@ -375,6 +553,37 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
                     ),
                   ),
                 const Spacer(),
+                // HTML Preview button
+                if (_isHtmlCode()) ...[
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _togglePreview,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _showPreview ? Icons.code : Icons.preview,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _showPreview ? 'Code' : 'Preview',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 // Copy button
                 Material(
                   color: Colors.transparent,
@@ -410,22 +619,44 @@ class _CodeBlockWidgetState extends State<_CodeBlockWidget> {
               ],
             ),
           ),
-          // Code content
-          Container(
-            padding: const EdgeInsets.all(12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: HighlightView(
-                widget.code,
-                language: widget.language.isEmpty ? 'plaintext' : widget.language,
-                theme: isDark ? monokaiSublimeTheme : atomOneLightTheme,
-                textStyle: GoogleFonts.jetBrainsMono(
-                  fontSize: 13,
-                  height: 1.5,
+          // Code content or HTML preview
+          if (_showPreview && _webViewController != null) ...[
+            // HTML Preview
+            Container(
+              height: 300,
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: theme.colorScheme.outline.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: WebViewWidget(controller: _webViewController!),
+            ),
+          ] else ...[
+            // Code content
+            Container(
+              padding: const EdgeInsets.all(12),
+              constraints: BoxConstraints(
+                maxHeight: 400, // Limit height for very long code
+              ),
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: HighlightView(
+                    widget.code,
+                    language: widget.language.isEmpty ? 'plaintext' : widget.language,
+                    theme: isDark ? monokaiSublimeTheme : atomOneLightTheme,
+                    textStyle: GoogleFonts.jetBrainsMono(
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

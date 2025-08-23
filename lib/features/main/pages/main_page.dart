@@ -3,9 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../theme/providers/theme_provider.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/chat_history_service.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../chat/pages/chat_page.dart';
 import '../../chat/pages/new_chat_page.dart';
 import '../../chat/widgets/model_selector_sheet.dart';
+import '../../chat/widgets/chat_sidebar.dart';
 import '../../profile/pages/profile_page.dart';
 import '../../../shared/widgets/smooth_app_bar.dart';
 
@@ -19,7 +23,8 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  int _chatKey = 0; // Key to force rebuild chat page
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _isForceUpdateRequired = false;
 
   @override
   void initState() {
@@ -38,6 +43,33 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     ));
     
     _animationController.forward();
+    
+    // Initialize chat history
+    ChatHistoryService.instance.initialize();
+    
+    // Check for app updates
+    _checkForAppUpdate();
+  }
+  
+  Future<void> _checkForAppUpdate() async {
+    // Wait a bit before checking for updates to let the UI settle
+    await Future.delayed(const Duration(seconds: 2));
+    
+    if (!mounted) return;
+    
+    try {
+      final updateInfo = await AppUpdateService.checkForUpdate();
+      if (updateInfo != null && mounted) {
+        if (updateInfo.isForceUpdate) {
+          setState(() {
+            _isForceUpdateRequired = true;
+          });
+        }
+        AppUpdateService.showUpdateDialog(context, updateInfo);
+      }
+    } catch (e) {
+      print('Error checking for app update: $e');
+    }
   }
 
   @override
@@ -48,15 +80,61 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final user = AuthService.instance.currentUser;
+    
+    // If force update is required, show a blocking screen
+    if (_isForceUpdateRequired) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.system_update,
+                  size: 64,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Update Required',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please update the app to continue',
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: ChatSidebar(
+        onSessionSelected: (sessionId) async {
+          // Switch to selected session - the ChatPage will listen for changes
+          await ChatHistoryService.instance.switchToSession(sessionId);
+        },
+        onNewChat: () async {
+          // Create new chat session - the ChatPage will listen for changes
+          await ChatHistoryService.instance.createNewSession();
+        },
+      ),
       appBar: SmoothAppBar(
         leading: IconButton(
-          onPressed: () => _showProfile(),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           icon: Icon(
-            Icons.person_outline,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            Icons.menu,
+            color: theme.colorScheme.onSurface.withOpacity(0.7),
           ),
-          tooltip: 'Profile',
         ),
         title: Center(
           child: GestureDetector(
@@ -106,22 +184,36 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           ),
         ),
         actions: [
-          IconButton(
-            onPressed: () => _startNewChat(),
-            icon: Icon(
-              Icons.add_comment_outlined,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+          GestureDetector(
+            onTap: () => _showProfile(),
+            child: Container(
+              width: 36,
+              height: 36,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  user?.name.isNotEmpty == true 
+                      ? user!.name[0].toUpperCase() 
+                      : 'U',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
             ),
-            tooltip: 'New Chat',
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
       ),
       body: FadeTransition(
         opacity: _fadeAnimation,
-        child: ChatPage(
-          key: ValueKey(_chatKey),
-        ),
+        child: const ChatPage(),
       ),
     );
   }
@@ -157,11 +249,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
   }
 
-  void _startNewChat() {
-    // Clear existing chat and start fresh
-    setState(() {
-      _chatKey++; // This will force ChatPage to rebuild and clear messages
-    });
+  void _startNewChat() async {
+    // Create a new chat session
+    await ChatHistoryService.instance.createNewSession();
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

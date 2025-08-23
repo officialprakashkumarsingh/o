@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app_service.dart';
 
@@ -13,8 +14,8 @@ class ImageService extends ChangeNotifier {
     _loadSettings();
   }
 
-  static const String baseUrl = 'https://ahamai-api.officialprakashkrsingh.workers.dev';
-  static const String authToken = 'ahamaibyprakash25';
+  static final String baseUrl = dotenv.env['AHAMAI_API_URL'] ?? 'https://ahamai-api.officialprakashkrsingh.workers.dev';
+  static final String authToken = dotenv.env['AHAMAI_API_KEY'] ?? 'ahamaibyprakash25';
   
   static final Map<String, String> _headers = {
     'Content-Type': 'application/json',

@@ -168,10 +168,8 @@ class _MessageModeSelectorState extends State<MessageModeSelector>
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                        width: isSelected ? 2 : 1,
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                        width: 1,
                       ),
                     ),
                     child: Row(

@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../../core/services/prompt_enhancer_service.dart';
+import '../../../core/services/ad_service.dart';
+import '../../../core/services/pdf_service.dart';
 import '../../../shared/widgets/prompt_enhancer.dart';
 
 class ChatInput extends StatefulWidget {
   final TextEditingController? controller;
-  final Function(String, {bool useWebSearch}) onSendMessage;
+  final Function(String) onSendMessage;
+  final Function(List<String>, String)? onFileUpload; // New callback for file uploads
   final Function(String)? onGenerateImage;
   final Function(String)? onGenerateDiagram;
   final Function(String)? onGeneratePresentation;
@@ -28,6 +32,7 @@ class ChatInput extends StatefulWidget {
     super.key,
     this.controller,
     required this.onSendMessage,
+    this.onFileUpload,
     this.onGenerateImage,
     this.onGenerateDiagram,
     this.onGeneratePresentation,
@@ -52,7 +57,7 @@ class _ChatInputState extends State<ChatInput> {
   bool _canSend = false;
   bool _shouldDisposeController = false;
   bool _showEnhancerSuggestion = false;
-  bool _webSearchEnabled = false;
+
   bool _imageGenerationMode = false;
   bool _diagramGenerationMode = false;
   bool _presentationGenerationMode = false;
@@ -61,6 +66,10 @@ class _ChatInputState extends State<ChatInput> {
   bool _quizGenerationMode = false;
   String? _pendingImageData;
   Timer? _typingTimer;
+  
+  // Hidden file content storage
+  String _hiddenFileContent = '';
+  List<String> _uploadedFileNames = [];
 
   @override
   void initState() {
@@ -134,18 +143,26 @@ class _ChatInputState extends State<ChatInput> {
   void _handleSend() {
     if (!_canSend) return;
     
-    final message = _controller.text.trim();
+    String message = _controller.text.trim();
     if (message.isEmpty) return;
 
     _controller.clear();
     _updateSendButton();
     
-    // Check if there's pending image data for vision analysis
-    if (_pendingImageData != null && widget.onVisionAnalysis != null) {
+    // If there's hidden file content, use the file upload callback
+    if (_hiddenFileContent.isNotEmpty && widget.onFileUpload != null) {
+      // Use the file upload callback to send both file names and content
+      widget.onFileUpload!(_uploadedFileNames, _hiddenFileContent);
+      
+      // Clear hidden content after sending
+      _hiddenFileContent = '';
+      _uploadedFileNames = [];
+    } else if (_pendingImageData != null && widget.onVisionAnalysis != null) {
+      // Check if there's pending image data for vision analysis
       widget.onVisionAnalysis!(message, _pendingImageData!);
       _pendingImageData = null; // Clear after use
     } else {
-      widget.onSendMessage(message, useWebSearch: _webSearchEnabled);
+      widget.onSendMessage(message);
     }
     
     HapticFeedback.lightImpact();
@@ -395,7 +412,7 @@ class _ChatInputState extends State<ChatInput> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _ExtensionsBottomSheet(
-        webSearchEnabled: _webSearchEnabled,
+
         imageGenerationMode: _imageGenerationMode,
         diagramGenerationMode: _diagramGenerationMode,
         presentationGenerationMode: _presentationGenerationMode,
@@ -404,11 +421,20 @@ class _ChatInputState extends State<ChatInput> {
         quizGenerationMode: _quizGenerationMode,
         onImageUpload: () async {
           Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
           await _handleImageUpload();
         },
-        onWebSearchToggle: (enabled) {
+        onPdfUpload: () async {
+          Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
+          await _handlePdfUpload();
+        },
+        onWebSearchToggle: (enabled) async {
+          if (enabled) {
+            await AdService.instance.onExtensionFeatureUsed();
+          }
           setState(() {
-            _webSearchEnabled = enabled;
+
             if (enabled) {
               _imageGenerationMode = false;
               _diagramGenerationMode = false;
@@ -424,7 +450,6 @@ class _ChatInputState extends State<ChatInput> {
           setState(() {
             _imageGenerationMode = enabled;
             if (enabled) {
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -434,8 +459,9 @@ class _ChatInputState extends State<ChatInput> {
           });
           Navigator.pop(context);
         },
-        onEnhancePrompt: () {
+        onEnhancePrompt: () async {
           Navigator.pop(context);
+          await AdService.instance.onExtensionFeatureUsed();
           _showPromptEnhancer();
         },
         onDiagramToggle: (enabled) {
@@ -443,7 +469,6 @@ class _ChatInputState extends State<ChatInput> {
             _diagramGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -457,7 +482,6 @@ class _ChatInputState extends State<ChatInput> {
             _presentationGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _chartGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -471,7 +495,6 @@ class _ChatInputState extends State<ChatInput> {
             _chartGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _flashcardGenerationMode = false;
@@ -485,7 +508,6 @@ class _ChatInputState extends State<ChatInput> {
             _flashcardGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -499,7 +521,6 @@ class _ChatInputState extends State<ChatInput> {
             _quizGenerationMode = enabled;
             if (enabled) {
               _imageGenerationMode = false;
-              _webSearchEnabled = false;
               _diagramGenerationMode = false;
               _presentationGenerationMode = false;
               _chartGenerationMode = false;
@@ -564,14 +585,128 @@ class _ChatInputState extends State<ChatInput> {
     }
   }
 
+  Future<void> _handlePdfUpload() async {
+    try {
+      // Pick files with multiple selection
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'pdf', 'txt', 'md', 'html', 'css', 'js', 'jsx', 'ts', 'tsx',
+          'json', 'xml', 'yaml', 'yml', 'csv', 'log', 'ini',
+          'py', 'java', 'cpp', 'c', 'h', 'hpp', 'cs', 'php',
+          'rb', 'go', 'rs', 'swift', 'kt', 'dart', 'sql', 'sh',
+          'zip'
+        ],
+        allowMultiple: true,
+      );
+      
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      
+      final files = result.files
+          .where((f) => f.path != null)
+          .map((f) => File(f.path!))
+          .toList();
+      
+      final fileNames = result.files.map((f) => f.name).toList();
+      
+      // Show loading indicator with custom styling
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text('Processing ${files.length} file${files.length > 1 ? 's' : ''}...'),
+            ],
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 30),
+        ),
+      );
+      
+      // Extract content from files
+      final fileContents = await FileExtractorService.extractContentFromFiles(files);
+      
+      // Clear loading indicator
+      ScaffoldMessenger.of(context).clearSnackBars();
+      
+      if (fileContents.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not extract content from files'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+      
+      // Store the extracted content hidden from user
+      _hiddenFileContent = FileExtractorService.formatFileContents(fileContents);
+      _uploadedFileNames = fileNames;
+      
+      // Keep input field clean - don't show file names
+      // The content is stored in _hiddenFileContent
+      _updateSendButton();
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${files.length} file${files.length > 1 ? 's' : ''} uploaded successfully',
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to process files: ${e.toString()}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
   bool _isAnyExtensionActive() {
     return _imageGenerationMode || 
            _diagramGenerationMode || 
            _presentationGenerationMode || 
            _chartGenerationMode || 
            _flashcardGenerationMode || 
-           _quizGenerationMode ||
-           _webSearchEnabled;
+           _quizGenerationMode;
   }
   
   void _clearAllExtensions() {
@@ -582,7 +717,6 @@ class _ChatInputState extends State<ChatInput> {
       _chartGenerationMode = false;
       _flashcardGenerationMode = false;
       _quizGenerationMode = false;
-      _webSearchEnabled = false;
     });
     _updateSendButton();
   }
@@ -624,7 +758,6 @@ class _ChatInputState extends State<ChatInput> {
 }
 
 class _ExtensionsBottomSheet extends StatelessWidget {
-  final bool webSearchEnabled;
   final bool imageGenerationMode;
   final bool diagramGenerationMode;
   final bool presentationGenerationMode;
@@ -632,6 +765,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
   final bool flashcardGenerationMode;
   final bool quizGenerationMode;
   final VoidCallback onImageUpload;
+  final VoidCallback onPdfUpload;
   final Function(bool) onWebSearchToggle;
   final Function(bool) onImageModeToggle;
   final Function(bool) onDiagramToggle;
@@ -642,7 +776,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
   final VoidCallback onEnhancePrompt;
 
   const _ExtensionsBottomSheet({
-    required this.webSearchEnabled,
+
     required this.imageGenerationMode,
     this.diagramGenerationMode = false,
     this.presentationGenerationMode = false,
@@ -650,6 +784,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
     this.flashcardGenerationMode = false,
     this.quizGenerationMode = false,
     required this.onImageUpload,
+    required this.onPdfUpload,
     required this.onWebSearchToggle,
     required this.onImageModeToggle,
     required this.onDiagramToggle,
@@ -694,17 +829,32 @@ class _ExtensionsBottomSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                // First row
+                // First row - File operations only
                 Row(
                   children: [
                     Expanded(
                       child: _CompactExtensionTile(
-                        icon: Icons.photo_camera_outlined,
-                        title: 'Analyze',
+                        icon: Icons.image_outlined,
+                        title: 'Analyze Image',
                         onTap: onImageUpload,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CompactExtensionTile(
+                        icon: Icons.folder_open_outlined,
+                        title: 'Upload File',
+                        onTap: onPdfUpload,
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Second row - Enhance and Image generation
+                Row(
+                  children: [
                     Expanded(
                       child: _CompactExtensionTile(
                         icon: Icons.auto_fix_high,
@@ -715,11 +865,11 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _ExtensionTile(
-                        icon: Icons.search_outlined,
-                        title: 'Search',
+                        icon: Icons.auto_awesome_outlined,
+                        title: 'Generate Image',
                         subtitle: '',
-                        isToggled: webSearchEnabled,
-                        onTap: () => onWebSearchToggle(!webSearchEnabled),
+                        isToggled: imageGenerationMode,
+                        onTap: () => onImageModeToggle(!imageGenerationMode),
                       ),
                     ),
                   ],
@@ -727,19 +877,9 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                 
                 const SizedBox(height: 10),
                 
-                // Second row - Generation modes
+                // Third row - Diagram, Chart, Presentation
                 Row(
                   children: [
-                    Expanded(
-                      child: _ExtensionTile(
-                        icon: Icons.auto_awesome_outlined,
-                        title: 'Image',
-                        subtitle: '',
-                        isToggled: imageGenerationMode,
-                        onTap: () => onImageModeToggle(!imageGenerationMode),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.account_tree_outlined,
@@ -759,24 +899,24 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                         onTap: () => onChartToggle(!chartGenerationMode),
                       ),
                     ),
-                  ],
-                ),
-                
-                const SizedBox(height: 10),
-                
-                // Third row - Presentation, Flashcards, Quiz
-                Row(
-                  children: [
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.slideshow_outlined,
-                        title: 'Presentation',
+                        title: 'Slides',
                         subtitle: '',
                         isToggled: presentationGenerationMode,
                         onTap: () => onPresentationToggle(!presentationGenerationMode),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                  ],
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Fourth row - Flashcards and Quiz
+                Row(
+                  children: [
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.style_outlined,
@@ -796,6 +936,8 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                         onTap: () => onQuizToggle(!quizGenerationMode),
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Container()), // Empty space for alignment
                   ],
                 ),
               ],
@@ -905,7 +1047,7 @@ class _CompactExtensionTile extends StatelessWidget {
               Icon(
                 icon,
                 size: 24,
-                color: Theme.of(context).colorScheme.primary,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
               const SizedBox(height: 4),
               Text(
@@ -913,7 +1055,7 @@ class _CompactExtensionTile extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,7 +9,7 @@ import '../../../core/services/template_service.dart';
 import '../../../core/services/message_mode_service.dart';
 import '../../../core/services/model_service.dart';
 import '../../../core/services/image_service.dart';
-import '../../../core/services/web_search_service.dart';
+
 import '../../../core/services/export_service.dart';
 import '../../../core/services/vision_service.dart';
 import '../../../core/models/image_message_model.dart';
@@ -17,11 +19,16 @@ import '../../../core/models/presentation_message_model.dart';
 import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
+
+import '../../../core/models/vision_analysis_message_model.dart';
+import '../../../core/models/file_upload_message_model.dart';
 import '../../../core/services/diagram_service.dart';
 import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
 import '../../../core/services/quiz_service.dart';
-import '../../../shared/widgets/animated_robot.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/ad_service.dart';
+import '../../../core/services/chat_history_service.dart';
 import '../../../shared/widgets/presentation_preview.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/chat_input.dart';
@@ -44,6 +51,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _showScrollToBottom = false;
   bool _userIsScrolling = false;
   bool _autoScrollEnabled = true;
+  bool _isLoadingHistory = false;
   
   // For stopping streams
   Stream<String>? _currentStream;
@@ -54,6 +62,72 @@ class _ChatPageState extends State<ChatPage> {
     ModelService.instance.loadModels();
     ImageService.instance.loadModels();
     _scrollController.addListener(_onScroll);
+    _initializeSession();
+    ChatHistoryService.instance.addListener(_onSessionChanged);
+  }
+  
+  Future<void> _initializeSession() async {
+    // Ensure we have an active session
+    await ChatHistoryService.instance.getOrCreateActiveSession();
+    // Then load any existing messages
+    _loadCurrentSession();
+  }
+  
+  @override
+  void dispose() {
+    ChatHistoryService.instance.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+  
+  void _onSessionChanged() {
+    // Only reload if we're not currently sending a message
+    if (!_isLoading) {
+      _loadCurrentSession();
+    }
+  }
+  
+  Future<void> _loadCurrentSession() async {
+    final sessionId = ChatHistoryService.instance.currentSessionId;
+    
+    if (!_isLoadingHistory) {
+      setState(() {
+        _isLoadingHistory = true;
+      });
+      
+      try {
+        if (sessionId != null) {
+          // Load messages for existing session
+          final messages = await ChatHistoryService.instance.loadSessionMessages(sessionId);
+          if (mounted) {
+            setState(() {
+              _messages.clear();
+              _messages.addAll(messages);
+              _isLoadingHistory = false;
+            });
+            
+            // Scroll to bottom after loading messages
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollController.hasClients && _messages.isNotEmpty) {
+                _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              }
+            });
+          }
+        } else {
+          // New session - clear messages
+          if (mounted) {
+            setState(() {
+              _messages.clear();
+              _isLoadingHistory = false;
+            });
+          }
+        }
+      } catch (e) {
+        print('Error loading session messages: $e');
+        setState(() {
+          _isLoadingHistory = false;
+        });
+      }
+    }
   }
 
   void _onScroll() {
@@ -79,12 +153,6 @@ class _ChatPageState extends State<ChatPage> {
         _showScrollToBottom = !isAtBottom;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
 
@@ -114,6 +182,7 @@ class _ChatPageState extends State<ChatPage> {
               controller: _inputController,
               selectedModel: modelService.selectedModel,
               onSendMessage: _handleSendMessage,
+              onFileUpload: _handleFileUpload,
               onGenerateImage: _handleImageGeneration,
               onGenerateDiagram: _handleDiagramGeneration,
               onGeneratePresentation: _handlePresentationGeneration,
@@ -170,85 +239,43 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildEmptyState() {
+    final user = AuthService.instance.currentUser;
+    final userName = user?.name ?? 'there';
     String greeting = '';
     final hour = DateTime.now().hour;
     
     if (hour >= 5 && hour < 12) {
-      greeting = 'Good morning! ☀️';
+      greeting = 'Good morning';
     } else if (hour >= 12 && hour < 17) {
-      greeting = 'Good afternoon! 🌤️';
+      greeting = 'Good afternoon';
     } else if (hour >= 17 && hour < 21) {
-      greeting = 'Good evening! 🌅';
+      greeting = 'Good evening';
     } else {
-      greeting = 'Good night! 🌙';
+      greeting = 'Good night';
     }
     
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Greeting bubble
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-              ),
+          // Simple greeting text without background
+          Text(
+            '$greeting, $userName!',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Theme.of(context).colorScheme.onBackground,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  greeting,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Ready to help you!',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'How can I help you today?',
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
           
-          // Robot
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: AnimatedRobot(
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Start a conversation',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ask me anything and I\'ll help you out!',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 32),
           
           // Template shortcut button
@@ -391,12 +418,18 @@ class _ChatPageState extends State<ChatPage> {
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-      );
-      HapticFeedback.lightImpact();
+      // Use jumpTo for instant scrolling during streaming for better performance
+      if (_isLoading) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      } else {
+        // Use smooth animation when not streaming
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+        HapticFeedback.lightImpact();
+      }
     }
   }
 
@@ -412,6 +445,10 @@ class _ChatPageState extends State<ChatPage> {
           child: MessageBubble(
             message: message,
             modelName: ModelService.instance.selectedModel,
+            userMessage: message.type == MessageType.assistant && index > 0 && _messages[index - 1].type == MessageType.user
+                ? _messages[index - 1].content
+                : '',
+            aiModel: ModelService.instance.selectedModel,
             onCopy: () => _copyMessage(message),
             onRegenerate: message.type == MessageType.assistant
                 ? () => _regenerateMessage(index)
@@ -423,7 +460,129 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  Future<void> _handleSendMessage(String content, {bool useWebSearch = false}) async {
+  Future<void> _handleFileUpload(List<String> fileNames, String fileContent) async {
+    final modelService = ModelService.instance;
+    
+    // Determine which models to use
+    List<String> modelsToUse;
+    if (modelService.multipleModelsEnabled && modelService.selectedModels.isNotEmpty) {
+      modelsToUse = modelService.selectedModels;
+    } else {
+      modelsToUse = [modelService.selectedModel];
+    }
+    
+    if (fileContent.trim().isEmpty || modelsToUse.isEmpty || modelsToUse.first.isEmpty) return;
+
+    // Ensure we have a session before proceeding
+    if (ChatHistoryService.instance.currentSessionId == null) {
+      print('Creating new session for file upload');
+      await ChatHistoryService.instance.getOrCreateActiveSession();
+    }
+
+    // Create a file upload message for display
+    final fileUploadMessage = FileUploadMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      fileNames: fileNames,
+      actualContent: fileContent,
+      timestamp: DateTime.now(),
+    );
+    
+    setState(() {
+      _messages.add(fileUploadMessage);
+      _isLoading = true;
+    });
+
+    _scrollToBottom();
+    
+    // Track message for ads
+    await AdService.instance.onMessageSent();
+    
+    // Save user message to history
+    ChatHistoryService.instance.saveMessage(fileUploadMessage).catchError((e) {
+      print('Error saving file upload message: $e');
+    });
+
+    // Get conversation history
+    final allHistory = _messages
+        .where((m) => !m.isStreaming && !m.hasError)
+        .map((m) => m.toApiFormat())
+        .toList();
+    
+    // Limit to last 20 messages for memory efficiency
+    final history = allHistory.length > 20 
+        ? allHistory.sublist(allHistory.length - 20)
+        : allHistory;
+
+    // Remove the last user message from history to avoid duplication
+    if (history.isNotEmpty && history.last['role'] == 'user') {
+      history.removeLast();
+    }
+
+    try {
+      // Process with each selected model
+      for (int i = 0; i < modelsToUse.length; i++) {
+        final model = modelsToUse[i];
+        final aiMessage = Message.assistant('', isStreaming: true);
+        
+        setState(() {
+          _messages.add(aiMessage);
+        });
+        
+        final messageIndex = _messages.length - 1;
+        
+        // Get the stream using static method
+        final stream = await ApiService.sendMessage(
+          message: fileContent, // Send the actual file content
+          model: model,
+          conversationHistory: history,
+        );
+        
+        // Process the stream
+        String fullResponse = '';
+        await for (final chunk in stream) {
+          if (mounted) {
+            fullResponse += chunk;
+            setState(() {
+              _messages[messageIndex] = Message.assistant(
+                fullResponse,
+                isStreaming: false,
+              );
+            });
+            _scrollToBottom();
+          }
+        }
+        
+        // Save AI response to history
+        ChatHistoryService.instance.saveMessage(
+          _messages[messageIndex],
+        ).catchError((e) {
+          print('Error saving AI response: $e');
+        });
+      }
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+    } catch (e) {
+      print('Error in file upload: $e');
+      setState(() {
+        _isLoading = false;
+        if (_messages.isNotEmpty && _messages.last.type == MessageType.assistant) {
+          final lastMessage = _messages.last;
+          _messages[_messages.length - 1] = Message(
+            id: lastMessage.id,
+            content: 'Sorry, I encountered an error while processing your files. Please try again.',
+            type: MessageType.assistant,
+            timestamp: lastMessage.timestamp,
+            hasError: true,
+          );
+        }
+      });
+    }
+  }
+
+  Future<void> _handleSendMessage(String content) async {
     final modelService = ModelService.instance;
     
     // Determine which models to use
@@ -436,6 +595,13 @@ class _ChatPageState extends State<ChatPage> {
     
     if (content.trim().isEmpty || modelsToUse.isEmpty || modelsToUse.first.isEmpty) return;
 
+    // Ensure we have a session before proceeding
+    if (ChatHistoryService.instance.currentSessionId == null) {
+      print('Creating new session for message');
+      await ChatHistoryService.instance.getOrCreateActiveSession();
+    }
+    print('Current session ID: ${ChatHistoryService.instance.currentSessionId}');
+
     final userMessage = Message.user(content.trim());
     setState(() {
       _messages.add(userMessage);
@@ -443,12 +609,25 @@ class _ChatPageState extends State<ChatPage> {
     });
 
     _scrollToBottom();
+    
+    // Track message for ads
+    await AdService.instance.onMessageSent();
+    
+    // Save user message to history - don't await to avoid blocking
+    ChatHistoryService.instance.saveMessage(userMessage).catchError((e) {
+      print('Error saving user message: $e');
+    });
 
-    // Get conversation history
-    final history = _messages
+    // Get conversation history (last 10 conversations = 20 messages)
+    final allHistory = _messages
         .where((m) => !m.isStreaming && !m.hasError)
         .map((m) => m.toApiFormat())
         .toList();
+    
+    // Limit to last 20 messages (10 conversations) for memory efficiency
+    final history = allHistory.length > 20 
+        ? allHistory.sublist(allHistory.length - 20)
+        : allHistory;
 
     // Remove the last user message from history to avoid duplication
     if (history.isNotEmpty && history.last['role'] == 'user') {
@@ -456,51 +635,34 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     try {
-      // Handle web search if enabled
       String enhancedContent = content.trim();
-      if (useWebSearch) {
-        // Show searching indicator
-        final searchingMessage = Message.assistant('🔍 Searching the web...', isStreaming: true);
-        setState(() {
-          _messages.add(searchingMessage);
-        });
-        
-        // Perform web search
-        final searchResults = await WebSearchService.search(query: content.trim());
-        final searchData = WebSearchService.formatSearchResults(searchResults);
-        final currentDateTime = WebSearchService.getCurrentDateTime();
-        
-        // Update content with search results and current time
-        enhancedContent = '''$currentDateTime
-
-Web Search Results for: "$content"
-
-$searchData
-
-Based on the above current information and search results, please provide a comprehensive response to: "$content"''';
-        
-        // Remove searching indicator
-        setState(() {
-          _messages.removeLast();
-        });
-      }
       
       // Handle multiple models or single model
       for (int i = 0; i < modelsToUse.length; i++) {
         final model = modelsToUse[i];
         
-        // Create assistant message for each model
-        final assistantMessage = Message.assistant('', isStreaming: true);
+        // Create assistant message for each model with unique ID
+        final assistantMessage = Message(
+          id: '${DateTime.now().millisecondsSinceEpoch}_${model}_$i',
+          content: '',
+          type: MessageType.assistant,
+          timestamp: DateTime.now(),
+          isStreaming: true,
+        );
+        
         setState(() {
           _messages.add(assistantMessage);
         });
         
+        final messageIndex = _messages.length - 1;
+        print('Added assistant message at index: $messageIndex for model: $model');
+        
         // Start response for this model
-        _handleModelResponse(
+        await _handleModelResponse(
           enhancedContent,
           model,
           history,
-          _messages.length - 1,
+          messageIndex,
           modelsToUse.length,
           i,
         );
@@ -526,6 +688,7 @@ Based on the above current information and search results, please provide a comp
     int modelIndex,
   ) async {
     try {
+      print('Starting response for model: $model at index: $messageIndex');
       final stream = await ApiService.sendMessage(
         message: content,
         model: model,
@@ -541,43 +704,43 @@ Based on the above current information and search results, please provide a comp
       }
       
       int chunkCount = 0;
+      print('Starting to receive chunks for message at index: $messageIndex');
+      
       await for (final chunk in stream) {
-        if (!mounted) break;
-        
         accumulatedContent += chunk;
         chunkCount++;
         
-        if (messageIndex < _messages.length) {
+        if (chunkCount == 1) {
+          print('First chunk received: ${chunk.substring(0, chunk.length.clamp(0, 50))}...');
+        }
+        
+        if (mounted && messageIndex < _messages.length) {
           setState(() {
             _messages[messageIndex] = _messages[messageIndex].copyWith(
               content: accumulatedContent,
               isStreaming: true,
             );
           });
+        } else {
+          print('Warning: Cannot update message - mounted: $mounted, messageIndex: $messageIndex, messages.length: ${_messages.length}');
         }
         
         // Smooth auto-scroll during streaming
         if (chunkCount % 2 == 0) {
+          // Use next frame for smoother updates
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Only auto-scroll if user hasn't manually scrolled away
             if (_autoScrollEnabled && _scrollController.hasClients && !_userIsScrolling) {
-              final maxScroll = _scrollController.position.maxScrollExtent;
-              final currentScroll = _scrollController.offset;
-              
-              // Smooth scroll to bottom if we're close (within 200 pixels)
-              if (maxScroll - currentScroll < 200) {
-                _scrollController.animateTo(
-                  maxScroll,
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.linear,
-                );
-              }
+              // Jump to bottom instantly during streaming for ultra smooth experience
+              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
             }
           });
         }
       }
 
       // Mark streaming as complete
+      print('Streaming complete. Total chunks: $chunkCount, Content length: ${accumulatedContent.length}');
+      
       if (mounted && messageIndex < _messages.length) {
         setState(() {
           _messages[messageIndex] = _messages[messageIndex].copyWith(
@@ -590,6 +753,17 @@ Based on the above current information and search results, please provide a comp
             _isLoading = false;
           }
         });
+        print('Message marked as complete at index: $messageIndex');
+        
+        // Save assistant message to history - don't await to avoid blocking
+        if (messageIndex < _messages.length) {
+          ChatHistoryService.instance.saveMessage(
+            _messages[messageIndex],
+            modelName: model,
+          ).catchError((e) {
+            print('Error saving assistant message: $e');
+          });
+        }
       }
     } catch (e) {
       if (mounted && messageIndex < _messages.length) {
@@ -729,15 +903,19 @@ Based on the above current information and search results, please provide a comp
 
     _scrollToBottom();
 
+    // Show analyzing indicator with shimmer animation
+    final analyzingMessage = VisionAnalysisMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString() + '_vision',
+      isAnalyzing: true,
+      analysisPrompt: prompt,
+    );
+    setState(() {
+      _messages.add(analyzingMessage);
+    });
+    
+    _scrollToBottom();
+
     try {
-      // Add AI response placeholder
-      final aiMessage = Message.assistant('');
-      setState(() {
-        _messages.add(aiMessage);
-      });
-
-      final messageIndex = _messages.length - 1;
-
       // Get vision analysis stream
       final stream = await VisionService.analyzeImage(
         prompt: prompt,
@@ -745,7 +923,20 @@ Based on the above current information and search results, please provide a comp
         model: bestVisionModel,
       );
 
+      // Remove analyzing indicator and add actual response
+      setState(() {
+        _messages.removeWhere((m) => m.id == analyzingMessage.id);
+      });
+
+      // Add AI response placeholder
+      final aiMessage = Message.assistant('');
+      setState(() {
+        _messages.add(aiMessage);
+      });
+
+      final messageIndex = _messages.length - 1;
       String fullResponse = '';
+      
       await for (final chunk in stream) {
         if (mounted) {
           fullResponse += chunk;
@@ -760,14 +951,18 @@ Based on the above current information and search results, please provide a comp
         _isLoading = false;
       });
     } catch (e) {
+      // Remove analyzing indicator if still present
+      setState(() {
+        _messages.removeWhere((m) => m.id == analyzingMessage.id);
+      });
+      
       if (mounted) {
         setState(() {
           _isLoading = false;
-          if (_messages.isNotEmpty && _messages.last.type == MessageType.assistant) {
-            _messages[_messages.length - 1] = Message.assistant(
-              'Sorry, I encountered an error while analyzing the image. Please try again.',
-            );
-          }
+          // Add error message
+          _messages.add(Message.assistant(
+            'Sorry, I encountered an error while analyzing the image. Please try again.',
+          ));
         });
       }
     }
@@ -795,6 +990,15 @@ Based on the above current information and search results, please provide a comp
 
     _scrollToBottom();
 
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Image',
+      subtitle: 'Creating visual artwork',
+      icon: Icons.auto_awesome_outlined,
+      tip: 'AI is painting your image',
+    );
+
     try {
       // Handle multiple image models or single model
       for (int i = 0; i < modelsToUse.length; i++) {
@@ -815,7 +1019,13 @@ Based on the above current information and search results, please provide a comp
           i,
         );
       }
+      
+      // Close loading dialog after all models complete
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
+      // Close loading dialog on error
+      if (mounted) Navigator.of(context).pop();
+      
       if (mounted) {
         setState(() {
           _messages.add(Message.error(
@@ -840,6 +1050,15 @@ Based on the above current information and search results, please provide a comp
     });
     
     _scrollToBottom();
+    
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Diagram',
+      subtitle: 'Creating visual representation',
+      icon: Icons.account_tree_outlined,
+      tip: 'AI is designing your diagram',
+    );
     
     try {
       // Generate diagram using AI
@@ -885,6 +1104,9 @@ Generate the Mermaid code now:''';
         mermaidCode: mermaidCode,
       );
       
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(diagramMessage);
         _isLoading = false;
@@ -892,6 +1114,9 @@ Generate the Mermaid code now:''';
       
       _scrollToBottom();
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(Message.error(
           'Sorry, I encountered an error generating the diagram. Please try again.',
@@ -913,6 +1138,9 @@ Generate the Mermaid code now:''';
     });
 
     _scrollToBottom();
+
+    // Show loading dialog with countdown
+    _showPresentationLoadingDialog(context);
 
     try {
       final presentationPrompt = '''Create a comprehensive professional presentation about: $prompt
@@ -958,6 +1186,9 @@ Generate the complete presentation now:''';
         slides: slides,
       );
 
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
       setState(() {
         _messages.add(presentationMessage);
         _isLoading = false;
@@ -965,6 +1196,9 @@ Generate the complete presentation now:''';
 
       _scrollToBottom();
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       setState(() {
         _messages.add(Message.error(
           'Sorry, I encountered an error generating the presentation. Please try again.',
@@ -972,6 +1206,40 @@ Generate the complete presentation now:''';
         _isLoading = false;
       });
     }
+  }
+
+  void _showPresentationLoadingDialog(BuildContext context) {
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Presentation',
+      subtitle: 'Creating your slides',
+      icon: Icons.slideshow_rounded,
+      tip: 'AI is crafting professional slides',
+    );
+  }
+  
+  void _showGenerationLoadingDialog({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required String tip,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: _GenerationLoadingWidget(
+            title: title,
+            subtitle: subtitle,
+            icon: icon,
+            tip: tip,
+          ),
+        );
+      },
+    );
   }
 
   List<PresentationSlide> _parsePresentation(String response) {
@@ -1116,6 +1384,15 @@ Generate the complete presentation now:''';
       _messages.add(userMessage);
     });
     
+    // Show loading dialog
+    _showGenerationLoadingDialog(
+      context: context,
+      title: 'Generating Chart',
+      subtitle: 'Creating data visualization',
+      icon: Icons.bar_chart_outlined,
+      tip: 'AI is analyzing your data',
+    );
+    
     // Generate chart prompt
     final chartPrompt = '''
 Generate a Chart.js configuration JSON for: $prompt
@@ -1191,6 +1468,9 @@ Format the response as:
               finalConfig = ChartService.generateSampleChart(prompt);
             }
             
+            // Close loading dialog
+            if (mounted) Navigator.of(context).pop();
+            
             setState(() {
               final index = _messages.indexWhere((m) => m.id == assistantMessage.id);
               if (index != -1) {
@@ -1204,6 +1484,9 @@ Format the response as:
         },
         onError: (error) {
           if (mounted) {
+            // Close loading dialog
+            Navigator.of(context).pop();
+            
             // Generate a sample chart on error
             final sampleConfig = ChartService.generateSampleChart(prompt);
             
@@ -1221,6 +1504,9 @@ Format the response as:
         },
       );
     } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
       // Generate sample on exception
       final sampleConfig = ChartService.generateSampleChart(prompt);
       
@@ -1499,4 +1785,231 @@ Generate 5-10 questions. The correctAnswer is the index (0-3) of the correct opt
     }
   }
 
+}
+
+class _GenerationLoadingWidget extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String tip;
+  
+  const _GenerationLoadingWidget({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.tip,
+  });
+  
+  @override
+  _GenerationLoadingWidgetState createState() => _GenerationLoadingWidgetState();
+}
+
+class _GenerationLoadingWidgetState extends State<_GenerationLoadingWidget>
+    with TickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late AnimationController _pulseController;
+  late Animation<double> _shimmerAnimation;
+  late Animation<double> _pulseAnimation;
+  int _secondsElapsed = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize shimmer animation
+    _shimmerController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+    
+    // Initialize pulse animation
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Start countdown timer
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {
+          _secondsElapsed++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _shimmerController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Animated icon
+          ScaleTransition(
+            scale: _pulseAnimation,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                widget.icon,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Title
+          Text(
+            widget.title,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Subtitle with timer
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: '${widget.subtitle}... ',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                TextSpan(
+                  text: _formatTime(_secondsElapsed),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Shimmer loading bars
+          Column(
+            children: List.generate(3, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: AnimatedBuilder(
+                  animation: _shimmerAnimation,
+                  builder: (context, child) {
+                    return Container(
+                      height: 8,
+                      width: 200 - (index * 30),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.primary.withOpacity(0.3),
+                            theme.colorScheme.surfaceVariant,
+                            theme.colorScheme.surfaceVariant,
+                          ],
+                          stops: [
+                            0.0,
+                            _shimmerAnimation.value - 0.3,
+                            _shimmerAnimation.value,
+                            _shimmerAnimation.value + 0.3,
+                            1.0,
+                          ].map((stop) => stop.clamp(0.0, 1.0)).toList(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Tips text
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.lightbulb_outline,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.tip,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

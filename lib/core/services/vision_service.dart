@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class VisionService {
-  static const String baseUrl = 'https://ahamai-api.officialprakashkrsingh.workers.dev';
-  static const String authToken = 'ahamaibyprakash25';
+  static final String baseUrl = dotenv.env['VISION_API_URL'] ?? 'https://ahamai-api.officialprakashkrsingh.workers.dev';
+  static final String authToken = dotenv.env['AHAMAI_API_KEY'] ?? 'ahamaibyprakash25';
   
   static final Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -42,6 +43,10 @@ class VisionService {
     required String model,
   }) async {
     try {
+      print('VisionService: Analyzing image with model: $model');
+      print('VisionService: Image data length: ${imageData.length} characters');
+      print('VisionService: Prompt: $prompt');
+      
       final messages = [
         {
           'role': 'user',
@@ -63,41 +68,61 @@ class VisionService {
       final requestBody = {
         'model': model,
         'messages': messages,
-        'stream': false, // Vision API doesn't seem to support streaming properly
-        'max_tokens': 2000,
+        'stream': true, // Enable streaming for vision API
         'temperature': 0.7,
+        'max_tokens': 2000,
       };
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/v1/chat/completions'),
-        headers: _headers,
-        body: jsonEncode(requestBody),
-      );
+      final request = http.Request('POST', Uri.parse('$baseUrl/v1/chat/completions'));
+      request.headers.addAll(_headers);
+      request.body = jsonEncode(requestBody);
+
+      final streamedResponse = await request.send();
       
-      if (response.statusCode == 200) {
+      if (streamedResponse.statusCode == 200) {
         final controller = StreamController<String>();
         
-        try {
-          final data = jsonDecode(response.body);
-          final content = data['choices']?[0]?['message']?['content'];
-          
-          if (content != null && content.toString().isNotEmpty) {
-            controller.add(content.toString());
-          } else {
-            controller.add('I was unable to analyze the image. Please try again.');
-          }
-        } catch (e) {
-          print('Error parsing vision response: $e');
-          print('Response body: ${response.body}');
-          controller.add('Sorry, I encountered an error while analyzing the image. Please try again.');
-        }
+        // Process the SSE stream
+        streamedResponse.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .listen(
+          (line) {
+            if (line.startsWith('data: ')) {
+              final data = line.substring(6);
+              if (data == '[DONE]') {
+                controller.close();
+                return;
+              }
+              
+              try {
+                final json = jsonDecode(data);
+                final delta = json['choices']?[0]?['delta'];
+                if (delta != null && delta['content'] != null) {
+                  controller.add(delta['content']);
+                }
+              } catch (e) {
+                // Skip invalid JSON lines
+              }
+            }
+          },
+          onError: (error) {
+            print('Stream error: $error');
+            controller.addError(error);
+            controller.close();
+          },
+          onDone: () {
+            controller.close();
+          },
+          cancelOnError: true,
+        );
         
-        controller.close();
         return controller.stream;
       } else {
-        print('Vision API error: ${response.statusCode}');
-        print('Response: ${response.body}');
-        throw Exception('Vision analysis failed: ${response.statusCode}');
+        print('Vision API error: ${streamedResponse.statusCode}');
+        final responseBody = await streamedResponse.stream.bytesToString();
+        print('Response: $responseBody');
+        throw Exception('Vision analysis failed: ${streamedResponse.statusCode}');
       }
     } catch (e) {
       print('Error in vision analysis: $e');
@@ -112,15 +137,21 @@ class VisionService {
   // Get the best available vision model
   static Future<String?> getBestVisionModel() async {
     try {
+      // First try to get models from the vision endpoint
       final visionModels = await getVisionModels();
       if (visionModels.isNotEmpty) {
-        // Return the first available vision model
+        print('Vision models from /v1/vision/models: ${visionModels.map((m) => m.id).toList()}');
         return visionModels.first.id;
       }
+      
+      // Fallback to known vision models
+      print('No vision models from API, using fallback: llama-4-scout-17b-16e-instruct');
+      return 'llama-4-scout-17b-16e-instruct';
     } catch (e) {
       print('Error getting vision models: $e');
+      // Return a known working vision model as fallback
+      return 'llama-4-scout-17b-16e-instruct';
     }
-    return null;
   }
 
   // Check if a model supports vision

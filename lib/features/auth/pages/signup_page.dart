@@ -2,20 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/email_validator_service.dart';
 import '../../../shared/widgets/smooth_button.dart';
 import '../../../shared/widgets/smooth_text_field.dart';
 import '../../main/pages/main_page.dart';
-import 'signup_page.dart';
+import 'login_page.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class SignUpPage extends StatefulWidget {
+  const SignUpPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<SignUpPage> createState() => _SignUpPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+class _SignUpPageState extends State<SignUpPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
@@ -27,6 +29,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _emailVerificationSent = false;
 
   @override
   void initState() {
@@ -72,12 +75,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   void dispose() {
     _animationController.dispose();
     _dotAnimationController.dispose();
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
+  Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() {
@@ -85,45 +89,93 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     });
     
     try {
-      final user = await AuthService.instance.signIn(
-        _emailController.text.trim(),
+      // Validate email with our custom validator
+      final emailValidation = EmailValidatorService.validateEmail(_emailController.text.trim());
+      
+      if (!emailValidation.isValid) {
+        _showError(emailValidation.error ?? 'Invalid email address');
+        return;
+      }
+      
+      // Use normalized email for signup to prevent Gmail dot trick
+      final normalizedEmail = emailValidation.normalizedEmail!;
+      
+      final user = await AuthService.instance.signUp(
+        _nameController.text.trim(),
+        normalizedEmail,
         _passwordController.text,
       );
       
       if (user != null && mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MainPage(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              const begin = Offset(0.0, 0.015);
-              const end = Offset.zero;
-              const curve = Curves.easeOutCubic;
-              
-              var tween = Tween(begin: begin, end: end).chain(
-                CurveTween(curve: curve),
-              );
-              
-              var offsetAnimation = animation.drive(tween);
-              var fadeAnimation = animation.drive(
-                Tween(begin: 0.0, end: 1.0).chain(
-                  CurveTween(curve: const Interval(0.0, 0.6, curve: Curves.easeOut)),
+        setState(() {
+          _emailVerificationSent = true;
+        });
+        
+        // Show verification dialog
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Icon(
+                  Icons.email_outlined,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-              );
-              
-              return FadeTransition(
-                opacity: fadeAnimation,
-                child: SlideTransition(
-                  position: offsetAnimation,
-                  child: child,
+                const SizedBox(width: 12),
+                const Text('Verify Your Email'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'We\'ve sent a verification email to:',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 300),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    normalizedEmail,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Please check your email and click the verification link to activate your account.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                  );
+                },
+                child: const Text('Go to Login'),
+              ),
+            ],
           ),
-          (route) => false,
         );
       } else if (mounted) {
-        _showError('Invalid email or password');
+        _showError('Sign up failed. Please try again.');
       }
     } catch (e) {
       if (mounted) {
@@ -190,9 +242,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 60),
+                        const SizedBox(height: 40),
                         
-                        // Unlock Icon with animation
+                        // Lock Icon with animation
                         ScaleTransition(
                           scale: _scaleAnimation,
                           child: Center(
@@ -204,7 +256,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
-                                Icons.lock_open_rounded,
+                                Icons.lock_rounded,
                                 color: theme.colorScheme.primary,
                                 size: 45,
                               ),
@@ -244,7 +296,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         
                         Center(
                           child: Text(
-                            'Welcome back',
+                            'Create your account',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: theme.colorScheme.onBackground.withOpacity(0.6),
                               fontWeight: FontWeight.w400,
@@ -252,9 +304,32 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                         ),
                         
-                        const SizedBox(height: 48),
+                        const SizedBox(height: 40),
                         
-                        // Email Field
+                        // Name Field
+                        SmoothTextField(
+                          controller: _nameController,
+                          hintText: 'Full Name',
+                          prefixIcon: Icons.person_outline,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your name';
+                            }
+                            if (value.length < 2) {
+                              return 'Name must be at least 2 characters';
+                            }
+                            // Check for valid name (no numbers or special chars except space, hyphen, apostrophe)
+                            if (!RegExp(r"^[a-zA-Z\s\-']+$").hasMatch(value)) {
+                              return 'Please enter a valid name';
+                            }
+                            return null;
+                          },
+                          textInputAction: TextInputAction.next,
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Email Field with robust validation
                         SmoothTextField(
                           controller: _emailController,
                           hintText: 'Email',
@@ -264,9 +339,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             if (value == null || value.isEmpty) {
                               return 'Please enter your email';
                             }
-                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                              return 'Please enter a valid email';
+                            
+                            // Use our custom email validator
+                            final validation = EmailValidatorService.validateEmail(value);
+                            if (!validation.isValid) {
+                              return validation.error;
                             }
+                            
                             return null;
                           },
                           textInputAction: TextInputAction.next,
@@ -294,19 +373,39 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Please enter your password';
+                              return 'Please enter a password';
+                            }
+                            if (value.length < 8) {
+                              return 'Password must be at least 8 characters';
+                            }
+                            // Check for at least one letter and one number
+                            if (!RegExp(r'^(?=.*[A-Za-z])(?=.*\d).+$').hasMatch(value)) {
+                              return 'Password must contain letters and numbers';
                             }
                             return null;
                           },
                           textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _signIn(),
+                          onFieldSubmitted: (_) => _signUp(),
                         ),
                         
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 8),
                         
-                        // Sign In Button
+                        // Password requirements hint
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            'Use 8+ characters with letters and numbers',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onBackground.withOpacity(0.5),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Sign Up Button
                         SmoothButton(
-                          onPressed: _isLoading ? null : _signIn,
+                          onPressed: _isLoading ? null : _signUp,
                           child: _isLoading
                               ? SizedBox(
                                   height: 20,
@@ -319,7 +418,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   ),
                                 )
                               : Text(
-                                  'Sign In',
+                                  'Create Account',
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
@@ -330,41 +429,22 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         
                         const SizedBox(height: 24),
                         
-                        // Don't have account
+                        // Already have account
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              "Don't have an account? ",
+                              'Already have an account? ',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onBackground.withOpacity(0.6),
                               ),
                             ),
                             GestureDetector(
                               onTap: () {
-                                Navigator.of(context).push(
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, animation, secondaryAnimation) => const SignUpPage(),
-                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                      const begin = Offset(1.0, 0.0);
-                                      const end = Offset.zero;
-                                      const curve = Curves.easeOutCubic;
-                                      
-                                      var tween = Tween(begin: begin, end: end).chain(
-                                        CurveTween(curve: curve),
-                                      );
-                                      
-                                      return SlideTransition(
-                                        position: animation.drive(tween),
-                                        child: child,
-                                      );
-                                    },
-                                    transitionDuration: const Duration(milliseconds: 400),
-                                  ),
-                                );
+                                Navigator.of(context).pop();
                               },
                               child: Text(
-                                'Sign Up',
+                                'Sign In',
                                 style: TextStyle(
                                   color: theme.colorScheme.primary,
                                   fontWeight: FontWeight.w600,
@@ -383,46 +463,5 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         ],
       ),
     );
-  }
-}
-
-// Dot pattern painter
-class DotPatternPainter extends CustomPainter {
-  final Color dotColor;
-  final double animation;
-  
-  DotPatternPainter({
-    required this.dotColor,
-    required this.animation,
-  });
-  
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = dotColor
-      ..style = PaintingStyle.fill;
-    
-    const dotRadius = 1.0;
-    const spacing = 20.0;
-    
-    for (double x = 0; x < size.width + spacing; x += spacing) {
-      for (double y = 0; y < size.height + spacing; y += spacing) {
-        final offset = Offset(
-          x + (animation * spacing),
-          y + (animation * spacing),
-        );
-        
-        canvas.drawCircle(
-          Offset(offset.dx % size.width, offset.dy % size.height),
-          dotRadius,
-          paint,
-        );
-      }
-    }
-  }
-  
-  @override
-  bool shouldRepaint(DotPatternPainter oldDelegate) {
-    return oldDelegate.animation != animation;
   }
 }

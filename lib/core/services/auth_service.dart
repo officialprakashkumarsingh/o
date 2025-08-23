@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/user_model.dart';
+import '../models/user_model.dart' as app_models;
 import 'app_service.dart';
 
 class AuthService {
@@ -10,94 +10,129 @@ class AuthService {
   
   AuthService._internal();
 
-  static const String _userKey = 'current_user';
-  
-  final StreamController<User?> _userController = StreamController<User?>.broadcast();
-  Stream<User?> get userStream => _userController.stream;
-  
-  User? _currentUser;
-  User? get currentUser => _currentUser;
-  
-  bool get isAuthenticated => _currentUser != null;
-
-  Future<void> initialize() async {
-    await _loadUserFromStorage();
+  SupabaseClient? _supabase;
+  SupabaseClient get supabase {
+    _supabase ??= AppService.supabase;
+    return _supabase!;
   }
-
-  Future<User?> signIn(String email, String password) async {
+  
+  final StreamController<app_models.User?> _userController = StreamController<app_models.User?>.broadcast();
+  Stream<app_models.User?> get userStream => _userController.stream;
+  
+  app_models.User? _currentUser;
+  app_models.User? get currentUser => _currentUser;
+  
+  bool get isAuthenticated {
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      // For demo purposes, accept any email/password
-      final user = User(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
-        email: email,
-        name: email.split('@').first,
-        createdAt: DateTime.now(),
-      );
-      
-      await _saveUserToStorage(user);
-      _currentUser = user;
-      _userController.add(user);
-      
-      return user;
+      return supabase.auth.currentUser != null;
     } catch (e) {
-      return null;
+      return false;
     }
   }
 
-  Future<User?> signUp(String name, String email, String password) async {
+  Future<void> initialize() async {
     try {
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Get Supabase client
+      _supabase = AppService.supabase;
       
-      final user = User(
-        id: 'user_${DateTime.now().millisecondsSinceEpoch}',
+      // Listen to auth state changes
+      _supabase!.auth.onAuthStateChange.listen((data) {
+      final user = data.session?.user;
+      if (user != null) {
+        _currentUser = app_models.User(
+          id: user.id,
+          email: user.email ?? '',
+          name: user.userMetadata?['name'] ?? user.email?.split('@').first ?? 'User',
+          createdAt: DateTime.parse(user.createdAt),
+        );
+        _userController.add(_currentUser);
+      } else {
+        _currentUser = null;
+        _userController.add(null);
+      }
+    });
+    
+    // Check if user is already logged in
+    final user = _supabase!.auth.currentUser;
+    if (user != null) {
+      _currentUser = app_models.User(
+        id: user.id,
+        email: user.email ?? '',
+        name: user.userMetadata?['name'] ?? user.email?.split('@').first ?? 'User',
+        createdAt: DateTime.parse(user.createdAt),
+      );
+      _userController.add(_currentUser);
+    }
+    } catch (e) {
+      print('Error initializing AuthService: $e');
+      // Continue without auth if Supabase is not available
+    }
+  }
+
+  Future<app_models.User?> signIn(String email, String password) async {
+    try {
+      final response = await supabase.auth.signInWithPassword(
         email: email,
-        name: name,
-        createdAt: DateTime.now(),
+        password: password,
       );
       
-      await _saveUserToStorage(user);
-      _currentUser = user;
-      _userController.add(user);
-      
-      return user;
-    } catch (e) {
+      if (response.user != null) {
+        final user = app_models.User(
+          id: response.user!.id,
+          email: response.user!.email ?? '',
+          name: response.user!.userMetadata?['name'] ?? email.split('@').first,
+          createdAt: DateTime.parse(response.user!.createdAt),
+        );
+        
+        _currentUser = user;
+        _userController.add(user);
+        
+        return user;
+      }
       return null;
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Sign in failed: $e');
+    }
+  }
+
+  Future<app_models.User?> signUp(String name, String email, String password) async {
+    try {
+      final response = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'name': name}, // Store name in user metadata
+      );
+      
+      if (response.user != null) {
+        final user = app_models.User(
+          id: response.user!.id,
+          email: response.user!.email ?? '',
+          name: name,
+          createdAt: DateTime.parse(response.user!.createdAt),
+        );
+        
+        _currentUser = user;
+        _userController.add(user);
+        
+        return user;
+      }
+      return null;
+    } on AuthException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Sign up failed: $e');
     }
   }
 
   Future<void> signOut() async {
     try {
-      await AppService.prefs.remove(_userKey);
+      await supabase.auth.signOut();
       _currentUser = null;
       _userController.add(null);
     } catch (e) {
-      // Handle error
-    }
-  }
-
-  Future<void> _loadUserFromStorage() async {
-    try {
-      final userJson = AppService.prefs.getString(_userKey);
-      if (userJson != null) {
-        final userData = jsonDecode(userJson);
-        _currentUser = User.fromJson(userData);
-        _userController.add(_currentUser);
-      }
-    } catch (e) {
-      // Handle error
-    }
-  }
-
-  Future<void> _saveUserToStorage(User user) async {
-    try {
-      final userJson = jsonEncode(user.toJson());
-      await AppService.prefs.setString(_userKey, userJson);
-    } catch (e) {
-      // Handle error
+      throw Exception('Sign out failed: $e');
     }
   }
 

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+echo "🚀 AhamAI Project Setup"
+echo "======================="
+echo ""
+
+# Check if .env exists
+if [ -f .env ]; then
+    echo "✅ .env file already exists"
+else
+    echo "📝 Creating .env file..."
+    
+    # Create .env with actual values
+    cat > .env << 'EOF'
+# API Configuration
+AHAMAI_API_URL=https://ahamai-api.officialprakashkrsingh.workers.dev
+AHAMAI_API_KEY=ahamaibyprakash25
+
+# Vision API
+VISION_API_URL=https://ahamai-api.officialprakashkrsingh.workers.dev
+
+# Google Search API (if needed in future)
+GOOGLE_SEARCH_API_URL=https://googlesearchapi.nepcoderapis.workers.dev
+
+# Supabase Configuration
+SUPABASE_URL=https://mdoksiisbokvmqsdcguu.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kb2tzaWlzYm9rdm1xc2RjZ3V1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4NTU3MzcsImV4cCI6MjA3MTQzMTczN30.Sq2eDHc_NgU9Br0zsWdYOr98WSIJS6AsNYaUt3NkbsU
+
+# App Update Configuration
+APP_UPDATE_JSON_URL=https://raw.githubusercontent.com/officialprakashkumarsingh/ahamai-landingpage/main/app-update.json
+
+# Other Configuration
+APP_NAME=AhamAI
+APP_VERSION=1.0.0
+EOF
+    
+    echo "✅ .env file created with API keys"
+fi
+
+echo ""
+echo "📦 Installing Flutter dependencies..."
+flutter pub get
+
+echo ""
+echo "🧹 Cleaning Flutter build..."
+flutter clean
+
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "To run the app, use: flutter run"
+echo ""
