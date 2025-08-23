@@ -1,8 +1,40 @@
 import 'dart:io';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:path/path.dart' as path;
 
-class PdfService {
-  static Future<String> extractTextFromPdf(File pdfFile) async {
+class FileExtractorService {
+  // Supported text file extensions
+  static const List<String> supportedTextExtensions = [
+    'txt', 'md', 'html', 'css', 'js', 'jsx', 'ts', 'tsx',
+    'json', 'xml', 'yaml', 'yml', 'csv', 'log', 'ini',
+    'py', 'java', 'cpp', 'c', 'h', 'hpp', 'cs', 'php',
+    'rb', 'go', 'rs', 'swift', 'kt', 'dart', 'sql', 'sh'
+  ];
+  
+  static Future<Map<String, String>> extractContentFromFiles(List<File> files) async {
+    Map<String, String> fileContents = {};
+    
+    for (var file in files) {
+      final fileName = path.basename(file.path);
+      final extension = path.extension(file.path).toLowerCase().replaceFirst('.', '');
+      
+      String content = '';
+      
+      if (extension == 'pdf') {
+        content = await _extractTextFromPdf(file);
+      } else if (supportedTextExtensions.contains(extension)) {
+        content = await _extractTextFromTextFile(file);
+      } else {
+        content = 'Unsupported file type: .$extension';
+      }
+      
+      fileContents[fileName] = content;
+    }
+    
+    return fileContents;
+  }
+  
+  static Future<String> _extractTextFromPdf(File pdfFile) async {
     try {
       // Load the PDF document
       final PdfDocument document = PdfDocument(inputBytes: await pdfFile.readAsBytes());
@@ -27,6 +59,11 @@ class PdfService {
         return 'Could not extract text from the PDF. The file might be image-based or empty.';
       }
       
+      // Limit content for very large files
+      if (extractedText.length > 50000) {
+        extractedText = extractedText.substring(0, 50000) + '\n\n[Content truncated due to size limits]';
+      }
+      
       return extractedText.trim();
     } catch (e) {
       print('Error extracting text from PDF: $e');
@@ -34,14 +71,39 @@ class PdfService {
     }
   }
   
-  static String formatPdfContent(String fileName, String extractedText) {
-    return '''
-PDF File: $fileName
-
-Content:
-$extractedText
-
-Please analyze and respond based on the above PDF content.
-''';
+  static Future<String> _extractTextFromTextFile(File textFile) async {
+    try {
+      String content = await textFile.readAsString();
+      
+      // Limit content for very large files
+      if (content.length > 50000) {
+        content = content.substring(0, 50000) + '\n\n[Content truncated due to size limits]';
+      }
+      
+      return content;
+    } catch (e) {
+      print('Error reading text file: $e');
+      return 'Error reading file: ${e.toString()}';
+    }
+  }
+  
+  static String formatFileContents(Map<String, String> fileContents) {
+    final buffer = StringBuffer();
+    
+    buffer.writeln('Files uploaded: ${fileContents.keys.join(', ')}');
+    buffer.writeln();
+    
+    for (var entry in fileContents.entries) {
+      buffer.writeln('File: ${entry.key}');
+      buffer.writeln('Content:');
+      buffer.writeln(entry.value);
+      buffer.writeln();
+      buffer.writeln('---');
+      buffer.writeln();
+    }
+    
+    buffer.writeln('Please analyze and respond based on the above file contents.');
+    
+    return buffer.toString();
   }
 }

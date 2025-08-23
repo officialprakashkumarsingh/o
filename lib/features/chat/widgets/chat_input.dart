@@ -64,6 +64,10 @@ class _ChatInputState extends State<ChatInput> {
   bool _quizGenerationMode = false;
   String? _pendingImageData;
   Timer? _typingTimer;
+  
+  // Hidden file content storage
+  String _hiddenFileContent = '';
+  List<String> _uploadedFileNames = [];
 
   @override
   void initState() {
@@ -137,14 +141,22 @@ class _ChatInputState extends State<ChatInput> {
   void _handleSend() {
     if (!_canSend) return;
     
-    final message = _controller.text.trim();
+    String message = _controller.text.trim();
     if (message.isEmpty) return;
 
     _controller.clear();
     _updateSendButton();
     
-    // Check if there's pending image data for vision analysis
-    if (_pendingImageData != null && widget.onVisionAnalysis != null) {
+    // If there's hidden file content, use that instead of the display text
+    if (_hiddenFileContent.isNotEmpty) {
+      // Send the hidden content to AI
+      widget.onSendMessage(_hiddenFileContent, useWebSearch: _webSearchEnabled);
+      
+      // Clear hidden content after sending
+      _hiddenFileContent = '';
+      _uploadedFileNames = [];
+    } else if (_pendingImageData != null && widget.onVisionAnalysis != null) {
+      // Check if there's pending image data for vision analysis
       widget.onVisionAnalysis!(message, _pendingImageData!);
       _pendingImageData = null; // Clear after use
     } else {
@@ -579,23 +591,32 @@ class _ChatInputState extends State<ChatInput> {
 
   Future<void> _handlePdfUpload() async {
     try {
-      // Pick PDF file
+      // Pick files with multiple selection
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        allowMultiple: false,
+        allowedExtensions: [
+          'pdf', 'txt', 'md', 'html', 'css', 'js', 'jsx', 'ts', 'tsx',
+          'json', 'xml', 'yaml', 'yml', 'csv', 'log', 'ini',
+          'py', 'java', 'cpp', 'c', 'h', 'hpp', 'cs', 'php',
+          'rb', 'go', 'rs', 'swift', 'kt', 'dart', 'sql', 'sh'
+        ],
+        allowMultiple: true,
       );
       
       if (result == null || result.files.isEmpty) {
         return;
       }
       
-      final file = File(result.files.single.path!);
-      final fileName = result.files.single.name;
+      final files = result.files
+          .where((f) => f.path != null)
+          .map((f) => File(f.path!))
+          .toList();
       
-      // Show loading indicator
+      final fileNames = result.files.map((f) => f.name).toList();
+      
+      // Show loading indicator with custom styling
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Row(
             children: [
               SizedBox(
@@ -603,45 +624,67 @@ class _ChatInputState extends State<ChatInput> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.onPrimary,
+                  ),
                 ),
               ),
-              SizedBox(width: 12),
-              Text('Extracting PDF content...'),
+              const SizedBox(width: 12),
+              Text('Processing ${files.length} file${files.length > 1 ? 's' : ''}...'),
             ],
           ),
-          duration: Duration(seconds: 30),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          duration: const Duration(seconds: 30),
         ),
       );
       
-      // Extract text from PDF
-      final extractedText = await PdfService.extractTextFromPdf(file);
+      // Extract content from files
+      final fileContents = await FileExtractorService.extractContentFromFiles(files);
       
       // Clear loading indicator
       ScaffoldMessenger.of(context).clearSnackBars();
       
-      if (extractedText.isEmpty || extractedText.startsWith('Error')) {
+      if (fileContents.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(extractedText.isEmpty ? 'Could not extract text from PDF' : extractedText),
+            content: const Text('Could not extract content from files'),
             backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
         return;
       }
       
-      // Format the content for AI
-      final formattedContent = PdfService.formatPdfContent(fileName, extractedText);
+      // Store the extracted content hidden from user
+      _hiddenFileContent = FileExtractorService.formatFileContents(fileContents);
+      _uploadedFileNames = fileNames;
       
-      // Set the text in the input field
-      _controller.text = formattedContent;
+      // Show file names in input field (not the content)
+      final displayText = 'Files uploaded: ${fileNames.join(', ')}';
+      _controller.text = displayText;
       _updateSendButton();
       
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('PDF "$fileName" loaded successfully'),
+          content: Text(
+            '${files.length} file${files.length > 1 ? 's' : ''} uploaded successfully',
+          ),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -649,8 +692,13 @@ class _ChatInputState extends State<ChatInput> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to process PDF: ${e.toString()}'),
+          content: Text('Failed to process files: ${e.toString()}'),
           backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.only(bottom: 100, left: 16, right: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
     }
@@ -801,8 +849,8 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _CompactExtensionTile(
-                        icon: Icons.picture_as_pdf_outlined,
-                        title: 'Upload PDF',
+                        icon: Icons.upload_file_outlined,
+                        title: 'Upload File',
                         onTap: onPdfUpload,
                       ),
                     ),

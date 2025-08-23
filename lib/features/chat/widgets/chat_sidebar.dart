@@ -69,12 +69,11 @@ class _ChatSidebarState extends State<ChatSidebar> {
   Future<void> _loadAllMessages() async {
     if (_isLoadingMessages) return;
     
-    // Remember if search field had focus
-    final hadFocus = _searchFocusNode.hasFocus;
+    // Don't update state if not needed to prevent focus loss
+    if (!mounted) return;
     
-    setState(() {
-      _isLoadingMessages = true;
-    });
+    // Update loading state without rebuilding if possible
+    _isLoadingMessages = true;
     
     await _historyService.loadAllSessionMessages();
     
@@ -83,10 +82,12 @@ class _ChatSidebarState extends State<ChatSidebar> {
         _isLoadingMessages = false;
       });
       
-      // Restore focus if it was lost
-      if (hadFocus && !_searchFocusNode.hasFocus) {
-        _searchFocusNode.requestFocus();
-      }
+      // Keep focus on search field
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted && !_searchFocusNode.hasFocus) {
+          _searchFocusNode.requestFocus();
+        }
+      });
     }
   }
   
@@ -476,6 +477,9 @@ class _ChatSidebarState extends State<ChatSidebar> {
                             controller: _searchController,
                             focusNode: _searchFocusNode,
                             style: theme.textTheme.bodyMedium,
+                            autofocus: false,
+                            keyboardType: TextInputType.text,
+                            textInputAction: TextInputAction.search,
                             decoration: InputDecoration(
                               hintText: 'Search chats and messages...',
                               hintStyle: theme.textTheme.bodyMedium?.copyWith(
@@ -488,9 +492,11 @@ class _ChatSidebarState extends State<ChatSidebar> {
                               contentPadding: const EdgeInsets.symmetric(vertical: 10),
                             ),
                             onTap: () {
-                              setState(() {
-                                _isSearching = true;
-                              });
+                              if (!_isSearching) {
+                                setState(() {
+                                  _isSearching = true;
+                                });
+                              }
                             },
                             onChanged: (value) {
                               // Search is handled by the listener
