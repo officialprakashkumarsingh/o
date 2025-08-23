@@ -48,25 +48,37 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
   }
 
   Future<void> _initializeApp() async {
-    // Load models in the background
-    ModelService.instance.loadModels();
-    
-    // Wait for animation and minimum splash duration
-    await Future.delayed(const Duration(seconds: 2));
-    
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const AuthGate(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
-      );
+    try {
+      // Load models in the background
+      print('Loading models...');
+      ModelService.instance.loadModels();
+      
+      // Wait for animation and minimum splash duration
+      await Future.delayed(const Duration(seconds: 2));
+      
+      if (mounted) {
+        print('Navigating to AuthGate...');
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const AuthGate(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error in _initializeApp: $e');
+      // Still try to navigate even if there's an error
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AuthGate()),
+        );
+      }
     }
   }
 

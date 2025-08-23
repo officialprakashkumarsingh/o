@@ -12,17 +12,39 @@ class AppService {
   static final supabase = Supabase.instance.client;
   
   static Future<void> initialize() async {
-    // Initialize Supabase
-    await Supabase.initialize(
-      url: SupabaseConfig.supabaseUrl,
-      anonKey: SupabaseConfig.supabaseAnonKey,
-    );
+    try {
+      // Initialize Supabase
+      print('Initializing Supabase...');
+      print('URL: ${SupabaseConfig.supabaseUrl}');
+      await Supabase.initialize(
+        url: SupabaseConfig.supabaseUrl,
+        anonKey: SupabaseConfig.supabaseAnonKey,
+      );
+      print('Supabase initialized successfully');
+    } catch (e) {
+      print('Error initializing Supabase: $e');
+      // Continue without Supabase if it fails
+    }
     
-    // Initialize shared preferences
-    _prefs = await SharedPreferences.getInstance();
+    try {
+      // Initialize shared preferences
+      print('Initializing SharedPreferences...');
+      _prefs = await SharedPreferences.getInstance();
+      print('SharedPreferences initialized successfully');
+    } catch (e) {
+      print('Error initializing SharedPreferences: $e');
+      rethrow;
+    }
     
-    // Initialize Ad service
-    await AdService.instance.initialize();
+    try {
+      // Initialize Ad service
+      print('Initializing Ad service...');
+      await AdService.instance.initialize();
+      print('Ad service initialized successfully');
+    } catch (e) {
+      print('Error initializing Ad service: $e');
+      // Continue without ads if it fails
+    }
     
     // Set system UI overlay style
     SystemChrome.setSystemUIOverlayStyle(
