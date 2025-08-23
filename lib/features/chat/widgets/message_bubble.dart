@@ -315,14 +315,16 @@ class _MessageBubbleState extends State<MessageBubble>
                 ],
                 
                 // Streaming indicator - only show if no content yet
-                // Don't show for DiagramMessage, PresentationMessage, or ChartMessage
+                // Don't show for special message types that have their own animations
                 if (isStreaming && 
                     widget.message.content.isEmpty &&
                     widget.message is! DiagramMessage &&
                     widget.message is! PresentationMessage &&
                     widget.message is! ChartMessage &&
                     widget.message is! FlashcardMessage &&
-                    widget.message is! QuizMessage) ...[
+                    widget.message is! QuizMessage &&
+                    widget.message is! WebSearchMessage &&
+                    widget.message is! VisionAnalysisMessage) ...[
                   const SizedBox(height: 8),
                   ThinkingAnimation(
                     color: Theme.of(context).colorScheme.primary,
@@ -1018,7 +1020,6 @@ class _VisionAnalysisShimmerState extends State<_VisionAnalysisShimmer>
     with SingleTickerProviderStateMixin {
   late AnimationController _shimmerController;
   late Animation<double> _shimmerAnimation;
-  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
@@ -1034,14 +1035,6 @@ class _VisionAnalysisShimmerState extends State<_VisionAnalysisShimmer>
     ).animate(CurvedAnimation(
       parent: _shimmerController,
       curve: Curves.linear,
-    ));
-
-    _pulseAnimation = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _shimmerController,
-      curve: Curves.easeInOut,
     ));
   }
 
@@ -1063,31 +1056,18 @@ class _VisionAnalysisShimmerState extends State<_VisionAnalysisShimmer>
           children: [
             Row(
               children: [
-                // Animated eye icon
-                AnimatedBuilder(
-                  animation: _pulseAnimation,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: _pulseAnimation.value,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              theme.colorScheme.primary.withOpacity(0.2),
-                              theme.colorScheme.primary.withOpacity(0.05),
-                            ],
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.remove_red_eye_outlined,
-                          size: 18,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    );
-                  },
+                // Static eye icon
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                  ),
+                  child: Icon(
+                    Icons.remove_red_eye_outlined,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 ShaderMask(

@@ -19,18 +19,30 @@ class ChatSidebar extends StatefulWidget {
 
 class _ChatSidebarState extends State<ChatSidebar> {
   final _historyService = ChatHistoryService.instance;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isSearching = false;
   
   @override
   void initState() {
     super.initState();
     _historyService.addListener(_onHistoryChanged);
     _loadHistory();
+    _searchController.addListener(_onSearchChanged);
   }
   
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     _historyService.removeListener(_onHistoryChanged);
     super.dispose();
+  }
+  
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = _searchController.text.toLowerCase();
+    });
   }
   
   void _onHistoryChanged() {
@@ -221,8 +233,15 @@ class _ChatSidebarState extends State<ChatSidebar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final user = AuthService.instance.currentUser;
-    final sessions = _historyService.sessions;
+    final allSessions = _historyService.sessions;
     final currentSessionId = _historyService.currentSessionId;
+    
+    // Filter sessions based on search query
+    final sessions = _searchQuery.isEmpty
+        ? allSessions
+        : allSessions.where((session) {
+            return session.title.toLowerCase().contains(_searchQuery);
+          }).toList();
     
     return Container(
       width: 280,
@@ -362,6 +381,69 @@ class _ChatSidebarState extends State<ChatSidebar> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                // Search bar
+                Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 12),
+                      Icon(
+                        _isSearching ? Icons.search : Icons.search,
+                        size: 18,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          style: theme.textTheme.bodyMedium,
+                          decoration: InputDecoration(
+                            hintText: 'Search chats...',
+                            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.4),
+                            ),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _isSearching = true;
+                            });
+                          },
+                          onChanged: (value) {
+                            // Search is handled by the listener
+                          },
+                        ),
+                      ),
+                      if (_searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: theme.colorScheme.onSurface.withOpacity(0.5),
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {
+                              _isSearching = false;
+                            });
+                          },
+                        ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -378,20 +460,26 @@ class _ChatSidebarState extends State<ChatSidebar> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.chat_bubble_outline,
+                              _searchQuery.isNotEmpty 
+                                  ? Icons.search_off 
+                                  : Icons.chat_bubble_outline,
                               size: 48,
                               color: theme.colorScheme.onSurface.withOpacity(0.3),
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'No conversations yet',
+                              _searchQuery.isNotEmpty
+                                  ? 'No chats found'
+                                  : 'No conversations yet',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurface.withOpacity(0.5),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Start a new chat to begin',
+                              _searchQuery.isNotEmpty
+                                  ? 'Try a different search term'
+                                  : 'Start a new chat to begin',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurface.withOpacity(0.4),
                               ),
