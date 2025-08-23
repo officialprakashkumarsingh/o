@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:path/path.dart' as path;
+import 'package:archive/archive.dart';
 
 class FileExtractorService {
   // Supported text file extensions
@@ -22,6 +23,8 @@ class FileExtractorService {
       
       if (extension == 'pdf') {
         content = await _extractTextFromPdf(file);
+      } else if (extension == 'zip') {
+        content = await _extractFromZipFile(file);
       } else if (supportedTextExtensions.contains(extension)) {
         content = await _extractTextFromTextFile(file);
       } else {
@@ -84,6 +87,58 @@ class FileExtractorService {
     } catch (e) {
       print('Error reading text file: $e');
       return 'Error reading file: ${e.toString()}';
+    }
+  }
+  
+  static Future<String> _extractFromZipFile(File zipFile) async {
+    try {
+      final bytes = await zipFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      
+      final buffer = StringBuffer();
+      buffer.writeln('ZIP Archive Contents:');
+      buffer.writeln('Total files: ${archive.length}');
+      buffer.writeln();
+      
+      int fileCount = 0;
+      for (final file in archive) {
+        if (file.isFile) {
+          fileCount++;
+          final fileName = file.name;
+          final extension = path.extension(fileName).toLowerCase().replaceFirst('.', '');
+          
+          buffer.writeln('File: $fileName');
+          
+          // Extract content based on file type
+          if (supportedTextExtensions.contains(extension)) {
+            final content = String.fromCharCodes(file.content);
+            // Limit content per file
+            if (content.length > 10000) {
+              buffer.writeln(content.substring(0, 10000));
+              buffer.writeln('[Content truncated]');
+            } else {
+              buffer.writeln(content);
+            }
+          } else {
+            buffer.writeln('[Binary file - content not extracted]');
+          }
+          
+          buffer.writeln();
+          buffer.writeln('---');
+          buffer.writeln();
+          
+          // Limit total files processed
+          if (fileCount >= 20) {
+            buffer.writeln('[Additional files truncated - ZIP contains more files]');
+            break;
+          }
+        }
+      }
+      
+      return buffer.toString();
+    } catch (e) {
+      print('Error extracting ZIP file: $e');
+      return 'Error reading ZIP file: ${e.toString()}';
     }
   }
   

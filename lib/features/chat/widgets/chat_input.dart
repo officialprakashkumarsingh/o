@@ -149,7 +149,11 @@ class _ChatInputState extends State<ChatInput> {
     
     // If there's hidden file content, use that instead of the display text
     if (_hiddenFileContent.isNotEmpty) {
-      // Send the hidden content to AI
+      // Create a display message for UI
+      final displayMessage = '📎 Files: ${_uploadedFileNames.join(', ')}';
+      
+      // Send both - display for UI, hidden content for AI processing
+      // We'll need to modify the message handling to support this
       widget.onSendMessage(_hiddenFileContent, useWebSearch: _webSearchEnabled);
       
       // Clear hidden content after sending
@@ -598,7 +602,8 @@ class _ChatInputState extends State<ChatInput> {
           'pdf', 'txt', 'md', 'html', 'css', 'js', 'jsx', 'ts', 'tsx',
           'json', 'xml', 'yaml', 'yml', 'csv', 'log', 'ini',
           'py', 'java', 'cpp', 'c', 'h', 'hpp', 'cs', 'php',
-          'rb', 'go', 'rs', 'swift', 'kt', 'dart', 'sql', 'sh'
+          'rb', 'go', 'rs', 'swift', 'kt', 'dart', 'sql', 'sh',
+          'zip'
         ],
         allowMultiple: true,
       );
@@ -668,9 +673,8 @@ class _ChatInputState extends State<ChatInput> {
       _hiddenFileContent = FileExtractorService.formatFileContents(fileContents);
       _uploadedFileNames = fileNames;
       
-      // Show file names in input field (not the content)
-      final displayText = 'Files uploaded: ${fileNames.join(', ')}';
-      _controller.text = displayText;
+      // Keep input field clean - don't show file names
+      // The content is stored in _hiddenFileContent
       _updateSendButton();
       
       // Show success message
@@ -849,7 +853,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _CompactExtensionTile(
-                        icon: Icons.upload_file_outlined,
+                        icon: Icons.folder_open_outlined,
                         title: 'Upload File',
                         onTap: onPdfUpload,
                       ),
@@ -865,7 +869,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.search_outlined,
-                        title: 'Search',
+                        title: 'Web Search',
                         subtitle: '',
                         isToggled: webSearchEnabled,
                         onTap: () => onWebSearchToggle(!webSearchEnabled),
@@ -883,7 +887,7 @@ class _ExtensionsBottomSheet extends StatelessWidget {
                     Expanded(
                       child: _ExtensionTile(
                         icon: Icons.auto_awesome_outlined,
-                        title: 'Image',
+                        title: 'Generate Image',
                         subtitle: '',
                         isToggled: imageGenerationMode,
                         onTap: () => onImageModeToggle(!imageGenerationMode),

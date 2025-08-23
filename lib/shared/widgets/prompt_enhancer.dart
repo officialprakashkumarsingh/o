@@ -194,10 +194,6 @@ class _PromptEnhancerState extends State<PromptEnhancer>
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                        width: 1,
-                      ),
                     ),
                     child: Center(
                       child: Column(
@@ -232,10 +228,6 @@ class _PromptEnhancerState extends State<PromptEnhancer>
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                        width: 1,
-                      ),
                     ),
                     child: SelectableText(
                       _enhancedPrompt,
@@ -252,11 +244,12 @@ class _PromptEnhancerState extends State<PromptEnhancer>
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
+                      child: TextButton(
                         onPressed: widget.onCancel,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
                         child: const Text('Keep Original'),
