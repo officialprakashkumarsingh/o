@@ -16,6 +16,7 @@ import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
 import '../../../core/models/web_search_message_model.dart';
+import '../../../core/models/vision_analysis_message_model.dart';
 import '../../../shared/widgets/markdown_message.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../shared/widgets/thinking_animation.dart';
@@ -302,6 +303,8 @@ class _MessageBubbleState extends State<MessageBubble>
                   _buildQuizContent(widget.message as QuizMessage),
                 ] else if (widget.message is WebSearchMessage) ...[
                   _buildWebSearchContent(widget.message as WebSearchMessage),
+                ] else if (widget.message is VisionAnalysisMessage) ...[
+                  _buildVisionAnalysisContent(widget.message as VisionAnalysisMessage),
                 ] else ...[
                   // Regular message content with markdown support
                   MarkdownMessage(
@@ -876,6 +879,17 @@ class _MessageBubbleState extends State<MessageBubble>
       );
     }
   }
+
+  Widget _buildVisionAnalysisContent(VisionAnalysisMessage message) {
+    if (message.isAnalyzing) {
+      return _VisionAnalysisShimmer();
+    } else {
+      return MarkdownMessage(
+        content: message.content,
+        isUser: false,
+      );
+    }
+  }
 }
 
 class _WebSearchShimmer extends StatefulWidget {
@@ -991,6 +1005,209 @@ class _WebSearchShimmerState extends State<_WebSearchShimmer>
           ],
         );
       },
+    );
+  }
+}
+
+class _VisionAnalysisShimmer extends StatefulWidget {
+  @override
+  _VisionAnalysisShimmerState createState() => _VisionAnalysisShimmerState();
+}
+
+class _VisionAnalysisShimmerState extends State<_VisionAnalysisShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+    
+    _shimmerAnimation = Tween<double>(
+      begin: -2.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.linear,
+    ));
+
+    _pulseAnimation = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Animated eye icon
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _pulseAnimation.value,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              theme.colorScheme.primary.withOpacity(0.2),
+                              theme.colorScheme.primary.withOpacity(0.05),
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.remove_red_eye_outlined,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 12),
+                ShaderMask(
+                  shaderCallback: (bounds) {
+                    return LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                        theme.colorScheme.primary.withOpacity(0.9),
+                        theme.colorScheme.onSurface.withOpacity(0.3),
+                      ],
+                      stops: [
+                        0.0,
+                        0.5,
+                        1.0,
+                      ],
+                      transform: GradientRotation(_shimmerAnimation.value),
+                    ).createShader(bounds);
+                  },
+                  child: Text(
+                    'Analyzing image...',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Progress indicators
+            Row(
+              children: [
+                _buildProgressStep(theme, 'Scanning', 0),
+                const SizedBox(width: 8),
+                _buildProgressStep(theme, 'Processing', 1),
+                const SizedBox(width: 8),
+                _buildProgressStep(theme, 'Understanding', 2),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Shimmer bars representing analysis progress
+            ...List.generate(4, (index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Container(
+                  height: 14,
+                  width: 180 + (index * 25),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(7),
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.primary.withOpacity(0.15),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                        theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                      ],
+                      stops: [
+                        0.0,
+                        _shimmerAnimation.value - 0.3,
+                        _shimmerAnimation.value,
+                        _shimmerAnimation.value + 0.3,
+                        1.0,
+                      ].map((stop) => stop.clamp(0.0, 1.0)).toList(),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressStep(ThemeData theme, String label, int index) {
+    final progress = ((_shimmerAnimation.value + 2) / 4).clamp(0.0, 1.0);
+    final isActive = progress > (index * 0.33);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: isActive 
+            ? theme.colorScheme.primary.withOpacity(0.1)
+            : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        border: Border.all(
+          color: isActive
+              ? theme.colorScheme.primary.withOpacity(0.3)
+              : theme.colorScheme.outline.withOpacity(0.1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.4),
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

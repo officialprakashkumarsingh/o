@@ -20,6 +20,7 @@ import '../../../core/models/chart_message_model.dart';
 import '../../../core/models/flashcard_message_model.dart';
 import '../../../core/models/quiz_message_model.dart';
 import '../../../core/models/web_search_message_model.dart';
+import '../../../core/models/vision_analysis_message_model.dart';
 import '../../../core/services/diagram_service.dart';
 import '../../../core/services/chart_service.dart';
 import '../../../core/services/flashcard_service.dart';
@@ -808,24 +809,19 @@ Based on the above current information and search results, please provide a comp
 
     _scrollToBottom();
 
-    // Show loading dialog
-    _showGenerationLoadingDialog(
-      context: context,
-      title: 'Analyzing Image',
-      subtitle: 'Understanding visual content',
-      icon: Icons.image_search_outlined,
-      tip: 'AI is examining your image',
+    // Show analyzing indicator with shimmer animation
+    final analyzingMessage = VisionAnalysisMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString() + '_vision',
+      isAnalyzing: true,
+      analysisPrompt: prompt,
     );
+    setState(() {
+      _messages.add(analyzingMessage);
+    });
+    
+    _scrollToBottom();
 
     try {
-      // Add AI response placeholder
-      final aiMessage = Message.assistant('');
-      setState(() {
-        _messages.add(aiMessage);
-      });
-
-      final messageIndex = _messages.length - 1;
-
       // Get vision analysis stream
       final stream = await VisionService.analyzeImage(
         prompt: prompt,
@@ -833,7 +829,20 @@ Based on the above current information and search results, please provide a comp
         model: bestVisionModel,
       );
 
+      // Remove analyzing indicator and add actual response
+      setState(() {
+        _messages.removeWhere((m) => m.id == analyzingMessage.id);
+      });
+
+      // Add AI response placeholder
+      final aiMessage = Message.assistant('');
+      setState(() {
+        _messages.add(aiMessage);
+      });
+
+      final messageIndex = _messages.length - 1;
       String fullResponse = '';
+      
       await for (final chunk in stream) {
         if (mounted) {
           fullResponse += chunk;
@@ -844,24 +853,22 @@ Based on the above current information and search results, please provide a comp
         }
       }
 
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
+      // Remove analyzing indicator if still present
+      setState(() {
+        _messages.removeWhere((m) => m.id == analyzingMessage.id);
+      });
       
       if (mounted) {
         setState(() {
           _isLoading = false;
-          if (_messages.isNotEmpty && _messages.last.type == MessageType.assistant) {
-            _messages[_messages.length - 1] = Message.assistant(
-              'Sorry, I encountered an error while analyzing the image. Please try again.',
-            );
-          }
+          // Add error message
+          _messages.add(Message.assistant(
+            'Sorry, I encountered an error while analyzing the image. Please try again.',
+          ));
         });
       }
     }
